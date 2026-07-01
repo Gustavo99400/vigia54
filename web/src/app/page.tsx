@@ -78,7 +78,7 @@ export default function Home() {
           {/* Brand */}
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center p-0.5 rounded-xl border border-white/8 bg-white/3">
-              <Image src="/logo.jpg" alt="Vigía 54" width={32} height={32} className="rounded-lg" priority style={{ width: "auto", height: "auto" }} />
+              <Image src="/logo.jpg" alt="Vigía 54" width={50} height={50} className="rounded-lg" priority style={{ width: "50px", height: "50px" }} />
             </div>
             <div>
               <h1 className="text-[13px] font-bold tracking-widest font-[family-name:var(--font-outfit)] text-white leading-none">VIGÍA 54</h1>

@@ -182,7 +182,7 @@ export default function Presentacion() {
       <header className="relative z-30 flex items-center justify-between px-4 py-3 bg-[#060609]/80 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center gap-3">
           <div className="p-1 rounded-lg border border-white/10 bg-white/5">
-            <Image src="/logo.jpg" alt="Vigía 54" width={24} height={24} className="rounded" />
+            <Image src="/logo.jpg" alt="Vigía 54" width={50} height={50} className="rounded" style={{ width: "50px", height: "50px" }} />
           </div>
           <div>
             <h1 className="text-[12px] font-bold tracking-widest font-[family-name:var(--font-outfit)] text-white leading-none">

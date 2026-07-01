@@ -15,7 +15,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <header className="dash-header animate-fade-in-down">
           <div className="flex items-center gap-3">
             <Link href="/" className="back-btn" title="Volver">←</Link>
-            <Image src="/logo.jpg" alt="Vigía 54" width={26} height={26} className="rounded-lg opacity-75" priority style={{ width:"auto", height:"auto" }} />
+            <Image src="/logo.jpg" alt="Vigía 54" width={50} height={50} className="rounded-lg opacity-75" priority style={{ width:"50px", height:"50px" }} />
             <div>
               <h1 className="text-[13px] font-bold text-white tracking-wide font-[family-name:var(--font-outfit)] leading-none">Panel del Arquitecto</h1>
               <p className="text-[9px] text-white/25 tracking-widest uppercase mt-0.5 hidden sm:block">Vigía 54 · Admin</p>

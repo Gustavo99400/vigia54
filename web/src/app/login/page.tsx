@@ -66,7 +66,7 @@ export default function LoginPage() {
         {/* Logo + brand */}
         <div className="flex flex-col items-center gap-4 mb-8">
           <div className="p-1 rounded-2xl border border-white/10 bg-white/3">
-            <Image src="/logo.jpg" alt="Vigía 54" width={68} height={68} className="rounded-xl" priority />
+            <Image src="/logo.jpg" alt="Vigía 54" width={50} height={50} className="rounded-xl" priority style={{ width: "50px", height: "50px" }} />
           </div>
           <div className="text-center">
             <h1 className="text-[22px] font-bold tracking-tight font-[family-name:var(--font-outfit)] text-white">Vigía 54</h1>
