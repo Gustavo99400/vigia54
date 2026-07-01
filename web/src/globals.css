@@ -1,0 +1,18 @@
+/* Global styles for Vigía 54 */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Outfit:wght@400;600&display=swap');
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-inter), sans-serif;
+  background: #000;
+  color: #fff;
+}
+
+/* Utility class for logo with white background */
+.logo-container {
+  background: #fff;
+  padding: 4px;
+  border-radius: 6px;
+  display: inline-block;
+}
