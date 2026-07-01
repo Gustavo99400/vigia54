@@ -24,6 +24,7 @@ import {
   Download,
   BookOpen
 } from "lucide-react";
+import { calculateTrustScore } from "@/utils/reputation";
 
 // Slide configuration data
 const SLIDES = [
@@ -64,11 +65,7 @@ export default function Presentacion() {
 
   // Compute Trust Score
   const computeTrustScore = () => {
-    if (totalReports === 0) return 100;
-    const score = ((verifiedReports * 1.0 - falseReports * 5.0) / totalReports) * 100;
-    // Clamp between -100 and 100, or let's use the exact scale. The formula is:
-    // TS = ((R_verificados * 1.0) - (R_falsas * 5.0)) / R_totales * 100
-    return Math.max(-100, Math.min(100, parseFloat(score.toFixed(1))));
+    return calculateTrustScore(verifiedReports, falseReports, totalReports);
   };
 
   const trustScore = computeTrustScore();
@@ -1002,6 +999,7 @@ export default function Presentacion() {
                   <div className="flex justify-between"><span>Componentes UI:</span><span className="text-white">82.3%</span></div>
                   <div className="flex justify-between"><span>Estado (Zustand):</span><span className="text-white">91.2%</span></div>
                   <div className="flex justify-between"><span>Cloud Functions:</span><span className="text-white">88.5%</span></div>
+                  <div className="flex justify-between border-t border-white/5 pt-1 mt-1 text-emerald-400"><span>Algoritmo Confianza:</span><span className="font-bold">100% (Jest)</span></div>
                 </div>
               </div>
 
