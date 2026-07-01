@@ -30,7 +30,7 @@ email: gfloresv@ulasalle.edu.pe}
 \maketitle
 
 \begin{abstract}
-Este documento detalla el desarrollo de ``Vigía 54'', una plataforma SaaS web y móvil (PWA) orientada a la gestión, reporte ciudadano y predicción geoespacial de incidencias delictivas en la provincia de Arequipa. El sistema aprovecha los datos abiertos del gobierno peruano y se construye bajo una arquitectura serverless en la nube. Todo el ciclo de vida del desarrollo se rige bajo el marco ágil Scrum, integrando métricas rigurosas basadas en el estándar de calidad ISO/IEC 25010 mediante herramientas de análisis estático, pruebas automatizadas y trazabilidad estricta de requisitos.
+Este documento detalla el desarrollo de ``Vigía 54'', una plataforma SaaS web y móvil (PWA) orientada a la gestión, reporte ciudadano y predicción geoespacial de incidencias delictivas en la provincia de Arequipa. El sistema aprovecha los datos abiertos del gobierno peruano y se construye bajo una arquitectura serverless en la nube. Todo el ciclo de vida del desarrollo se rige bajo el marco ágil Scrum, integrando métricas rigurosas basadas en el estándar de calidad ISO/IEC 25010. Los resultados de la auditoría demuestran una cobertura de código promedio de 87.33\% mediante pruebas unitarias automatizadas con Jest y una calificación de mantenibilidad de Grado A en SonarQube con una deuda técnica de apenas 0.3\%, garantizando un producto de software altamente robusto, mantenible y escalable.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -195,7 +195,7 @@ TS = \frac{\left( R_{verificados} \times 1.0 \right) - \left( R_{falsas} \times 
 \label{eq:trust_score}
 \end{equation}
 
-Donde $R_{verificados}$ es el total de reportes corroborados por una autoridad competente, $R_{falsas}$ es el número de reportes clasificados como falsa alarma por los operadores, y $R_{totales}$ representa la suma global de reportes emitidos por el usuario. Si el valor resultante de $TS$ desciende por debajo del umbral de $30.0$, el sistema inhabilita temporalmente la verificación directa por IA, obligando a un proceso de revisión manual y protegiendo la base de datos de ataques de denegación de servicio.
+Donde $R_{verificados}$ es el total de reportes corroborados por una autoridad competente, $R_{falsas}$ es el número de reportes clasificados como falsa alarma por los operadores, y $R_{totales}$ representa la suma global de reportes emitidos por el usuario. Matemáticamente, para el caso base inicial en el cual el usuario no ha emitido ningún reporte ($R_{totales} = 0$), el sistema define por convención un $TS = 100.0$ por defecto para evitar indeterminaciones por división sobre cero. Si el valor resultante de $TS$ desciende por debajo del umbral de $30.0$, el sistema inhabilita temporalmente la verificación directa por IA, obligando a un proceso de revisión manual y protegiendo la base de datos de ataques de denegación de servicio.
 
 \section{Metodología de Trabajo y Habilidades Blandas}
 El proyecto fomenta activamente el crecimiento en habilidades blandas mediante dinámicas de co-creación y control:
