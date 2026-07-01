@@ -154,7 +154,7 @@ El ciclo de vida del proyecto está condicionado a dos revisiones e hitos críti
 La abstracción estructural y el modelamiento conceptual del ecosistema de software se realizan utilizando herramientas CASE modernas bajo los siguientes enfoques gráficos:
 \begin{itemize}
     \item \textbf{Diagrama de Casos de Uso (UML):} Abstrae de forma gráfica la interacción y límites del sistema de los tres actores identificados (Ciudadano, Policía y Administrador) frente a las fronteras de los 8 requisitos funcionales definidos.
-    \item \textbf{Diagrama de Arquitectura Cloud Orientada a la Nube:} Detalla el flujo de datos e interconexión de servicios distribuidos. Describe la conexión entre la interfaz web adaptativa construida en \textit{Next.js}, el backend de microservicios en \textit{Cloud Functions} desplegado sobre contenedores, la persistencia en \textit{Cloud Firestore} y las llamadas de computación asíncrona hacia los servicios de Inteligencia Artificial generativa.
+    \item \textbf{Diagrama de Arquitectura Cloud Orientada a la Nube:} Detalla el flujo de datos e interconexión de servicios distribuidos (véase la Fig.~\ref{fig:arquitectura}). Describe la conexión entre la interfaz web adaptativa construida en \textit{Next.js}, el backend de microservicios en \textit{Cloud Functions} desplegado sobre contenedores, la persistencia en \textit{Cloud Firestore} y las llamadas de computación asíncrona hacia los servicios de Inteligencia Artificial generativa.
     \item \textbf{Modelo Entidad-Relación / Esquema NoSQL:} Muestra el mapeo lógico y la jerarquía de colecciones y subcolecciones estructuradas en la base de datos documental (documentos de usuarios, reportes geolocalizados y nodos de analítica agregada por distritos).
 \end{itemize}
 
@@ -260,7 +260,7 @@ Cloud Functions (IA Pipeline) & $88.5\%$ & $80.0\%$ & $90.0\%$ & Aprobado \\ \ad
 \end{table}
 
 \subsection{Gobernanza y Puertas de Calidad (Quality Gates)}
-Para evitar la regresión de calidad en el ciclo de vida de Scrum, se configuró una puerta de calidad (\textit{Quality Gate}) estricta en el pipeline de Integración Continua (CI) en GitHub Actions. Los commits no se fusionan a la rama principal a menos que cumplan con la totalidad de las siguientes reglas de gobernanza:
+Para evitar la regresión de calidad en el ciclo de vida de Scrum, se configuró una puerta de calidad (\textit{Quality Gate}) estricta en el pipeline de Integración Continua (CI) en GitHub Actions, cuyo flujo procedimental se detalla en la Fig.~\ref{fig:pipeline}. Los commits no se fusionan a la rama principal a menos que cumplan con la totalidad de las siguientes reglas de gobernanza:
 \begin{itemize}
     \item Cobertura de código superior al $80\%$ de líneas efectivas.
     \item Cero bugs bloqueantes o críticos en SonarQube.
