@@ -51,3 +51,7 @@ Thumbs.db
 .env.test.local
 .env.production.local
 firebase/functions/.env
+
+# Firebase local hosting build and cache
+firebase/.firebase/
+firebase/public/
