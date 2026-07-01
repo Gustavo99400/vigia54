@@ -9,7 +9,7 @@ import { showToast } from "@/components/Toast";
 import {
   Camera, AlertTriangle, Hammer, UserRound,
   Car, MapPin, Loader, Check, X,
-  Flame, AlertOctagon, Mountain,
+  AlertCircle, AlertOctagon, Mountain,
 } from "lucide-react";
 
 type Step = 1 | 2 | 3;
@@ -47,7 +47,7 @@ const CATEGORIES = [
   },
   {
     id: "incendio",
-    Icon: Flame,
+    Icon: AlertCircle,
     label: "Incendio",
     color: "text-red-500 bg-red-600/10 border-red-600/25",
   },
