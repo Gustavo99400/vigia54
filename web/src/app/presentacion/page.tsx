@@ -55,14 +55,6 @@ export default function Presentacion() {
   const containerRef = useRef<HTMLDivElement>(null);
   const autoplayTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Synchronize total reports when verified/false changes to keep it mathematical and logical
-  useEffect(() => {
-    const minTotal = verifiedReports + falseReports;
-    if (totalReports < minTotal) {
-      setTotalReports(minTotal);
-    }
-  }, [verifiedReports, falseReports, totalReports]);
-
   // Compute Trust Score
   const computeTrustScore = () => {
     return calculateTrustScore(verifiedReports, falseReports, totalReports);
@@ -78,6 +70,16 @@ export default function Presentacion() {
   };
 
   const status = getScoreStatus(trustScore);
+
+  const scrollToSlide = (index: number) => {
+    if (!containerRef.current) return;
+    const slideHeight = containerRef.current.clientHeight;
+    containerRef.current.scrollTo({
+      top: index * slideHeight,
+      behavior: "smooth",
+    });
+    setCurrentSlideIndex(index);
+  };
 
   // Autoplay Logic
   useEffect(() => {
@@ -108,16 +110,6 @@ export default function Presentacion() {
     if (index !== currentSlideIndex && index >= 0 && index < SLIDES.length) {
       setCurrentSlideIndex(index);
     }
-  };
-
-  const scrollToSlide = (index: number) => {
-    if (!containerRef.current) return;
-    const slideHeight = containerRef.current.clientHeight;
-    containerRef.current.scrollTo({
-      top: index * slideHeight,
-      behavior: "smooth",
-    });
-    setCurrentSlideIndex(index);
   };
 
   // Keyboard navigation
@@ -341,10 +333,10 @@ export default function Presentacion() {
                 <h3 className="text-xs font-bold text-white uppercase tracking-wider">Aprovechando Datos Abiertos (Open Data)</h3>
               </div>
               <p className="text-xs text-white/70 leading-relaxed">
-                "Vigía 54" consume de manera directa el dataset oficial del Portal Nacional de Datos Abiertos del Estado Peruano:
+                &ldquo;Vigía 54&rdquo; consume de manera directa el dataset oficial del Portal Nacional de Datos Abiertos del Estado Peruano:
               </p>
               <div className="text-xs font-semibold text-amber-400 italic bg-amber-500/5 border border-amber-500/10 p-3 rounded-xl">
-                "Denuncias por Delitos y Faltas de la Policía Nacional del Perú - Región Arequipa"
+                &ldquo;Denuncias por Delitos y Faltas de la Policía Nacional del Perú - Región Arequipa&rdquo;
               </div>
               <div className="grid grid-cols-2 gap-3 text-center">
                 <div className="bg-white/5 border border-white/5 rounded-xl p-3">
@@ -755,7 +747,11 @@ export default function Presentacion() {
                       min="0"
                       max="50"
                       value={verifiedReports}
-                      onChange={(e) => setVerifiedReports(parseInt(e.target.value))}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setVerifiedReports(val);
+                        setTotalReports((prev) => Math.max(prev, val + falseReports));
+                      }}
                       className="w-full accent-emerald-500 h-1 bg-white/10 rounded-lg cursor-pointer"
                     />
                   </div>
@@ -771,7 +767,11 @@ export default function Presentacion() {
                       min="0"
                       max="20"
                       value={falseReports}
-                      onChange={(e) => setFalseReports(parseInt(e.target.value))}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setFalseReports(val);
+                        setTotalReports((prev) => Math.max(prev, verifiedReports + val));
+                      }}
                       className="w-full accent-red-500 h-1 bg-white/10 rounded-lg cursor-pointer"
                     />
                   </div>
@@ -1069,7 +1069,7 @@ export default function Presentacion() {
                 ¡Gracias por su Atención!
               </h2>
               <p className="text-xs md:text-sm text-white/50 max-w-xl mx-auto leading-relaxed">
-                El sistema "Vigía 54" demuestra cómo la integración de datos abiertos públicos y la inteligencia artificial en la nube, regidos por marcos ágiles y estándares rigurosos de calidad (ISO/IEC 25010), puede derivar en productos de software robustos, estables y de alto impacto social.
+                El sistema &ldquo;Vigía 54&rdquo; demuestra cómo la integración de datos abiertos públicos y la inteligencia artificial en la nube, regidos por marcos ágiles y estándares rigurosos de calidad (ISO/IEC 25010), puede derivar en productos de software robustos, estables y de alto impacto social.
               </p>
             </div>
 
