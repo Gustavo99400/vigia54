@@ -1,239 +1,159 @@
-# 🛡️ Vigía 54 - Sistema Inteligente de Predicción y Reporte de Incidencias Delictivas en Arequipa
+# 🛡️ Vigía 54 — Sistema Inteligente de Predicción y Reporte de Incidencias
 
-[![CI Pipeline](https://github.com/Gustavo99400/vigia54/actions/workflows/main.yml/badge.badge.svg)](https://github.com/Gustavo99400/vigia54/actions)
-[![SonarQube Quality Gate](https://img.shields.io/badge/SonarQube-Quality%20Gate%20Passed-emerald?style=flat&logo=sonarqube)](https://sonarcloud.io/)
-[![Jest Code Coverage](https://img.shields.io/badge/Coverage-87.33%25-emerald?style=flat&logo=jest)](https://jestjs.io/)
-[![Next.js Version](https://img.shields.io/badge/Next.js-16.2.6-black?style=flat&logo=nextdotjs)](https://nextjs.org/)
-[![Firebase Version](https://img.shields.io/badge/Firebase-12.13.0-orange?style=flat&logo=firebase)](https://firebase.google.com/)
+[![CI Pipeline](https://github.com/Gustavo99400/vigia54/actions/workflows/main.yml/badge.svg)](https://github.com/Gustavo99400/vigia54/actions)
+[![Jest Coverage](https://img.shields.io/badge/Coverage-87%25-brightgreen?logo=jest)](https://jestjs.io/)
+[![Next.js](https://img.shields.io/badge/Next.js-15.3-black?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19.0-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![Firebase](https://img.shields.io/badge/Firebase-10.14-orange?logo=firebase)](https://firebase.google.com/)
+[![Gemini](https://img.shields.io/badge/Google_Gemini-2.0_Flash-blue?logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
 
-**Vigía 54** es una plataforma integral SaaS web y móvil (PWA) orientada a la gestión, reporte ciudadano colaborativo y predicción geoespacial de incidencias delictivas en la provincia de Arequipa, Perú. El sistema aprovecha la ingesta estructurada de datos abiertos gubernamentales de la Policía Nacional del Perú, procesándolos mediante modelos analíticos de clustering en la nube e incorporando un pipeline asíncrono con Inteligencia Artificial (Google Gemini) para el triaje y validación autónoma de los reportes recibidos.
+Plataforma inteligente (SaaS Web / PWA) orientada a la **gestión, reporte ciudadano y predicción geoespacial de la criminalidad** en Arequipa Metropolitana, Perú. El sistema integra algoritmos de reputación basados en reputación ciudadana, triaje predictivo mediante **Inteligencia Artificial Generativa** y análisis de cercanía para la toma de decisiones por parte de agentes del **Serenazgo y la Policía Nacional del Perú (PNP)**.
 
-Todo el ciclo de vida del desarrollo de software del ecosistema se rigió bajo el estándar de calidad internacional **ISO/IEC 25010** y el marco de trabajo ágil **Scrum**.
-
----
-
-## 📌 Ejes Tecnológicos Principales
-
-1. **Triaje Automatizado con IA (Gemini):** Procesamiento de lenguaje natural (NLP) y visión por computadora mediante la API de Google Gemini para clasificar la veracidad de los reportes en tiempo real y descartar falsas alarmas.
-2. **Predicción Geoespacial:** Generación de mapas de calor interactivos probabilísticos de criminalidad basados en algoritmos de clustering y codificación geohash sobre datasets históricos.
-3. **Arquitectura Cloud Nativa:** Infraestructura elástica y serverless montada sobre Google Cloud Platform (GCP) y Firebase, con funciones asíncronas en Node.js y base de datos NoSQL distribuida.
+Construido y diseñado bajo estándares de calidad de software (**ISO/IEC 25010**) y metodologías ágiles (**Scrum**).
 
 ---
 
-## ⚙️ Arquitectura de Sistemas y Flujo de Datos
-
-El siguiente diagrama detalla la interconexión de servicios cloud serverless y el pipeline asíncrono de Inteligencia Artificial que compone el ecosistema:
+## 🗺️ Arquitectura de Flujo de Información (SOS & Reportes)
 
 ```mermaid
 graph TD
-    %% Estilos de Nodos
-    classDef client fill:#f9f9f9,stroke:#ef4444,stroke-width:2px,color:#111;
-    classDef cloud fill:#f0f9ff,stroke:#3b82f6,stroke-width:2px,color:#111;
-    classDef db fill:#f0fdf4,stroke:#22c55e,stroke-width:2px,color:#111;
-    classDef ai fill:#faf5ff,stroke:#a855f7,stroke-width:2px,color:#111;
-
-    %% Nodos
-    PWA[PWA Client <br> Next.js / Zustand / Leaflet]:::client
-    Auth[Firebase Authentication <br> JWT / Roles]:::cloud
-    DB[(Cloud Firestore <br> NoSQL Geoespacial)]:::db
-    Func[Cloud Functions <br> Node.js Backend]:::cloud
-    Gemini[Google Gemini API <br> Triaje Multimodal]:::ai
-
-    %% Enlaces
-    PWA <-->|1. Autentica & Claims| Auth
-    PWA <-->|2. Reportes / Consultas GPS| DB
-    DB -->|3. Firestore Document Trigger| Func
-    Func <-->|4. Análisis NLP & Multimedia| Gemini
-    Func -->|5. Actualiza Prioridad & Estado| DB
+    A[Ciudadano / Dispositivo GPS] -->|A. Reporte Normal status: pending| B[(Cloud Firestore)]
+    A -->|B. Alerta SOS isSos: true + status: pending| B
+    
+    B -->|Trigger: onDocumentCreated| C[Cloud Functions: triageReport]
+    
+    C -->|B1. Interceptor de Pánico SOS| D{¿isSos == true?}
+    D -->|Sí| E[Autoverificación: verified, priority: critical, aiScore: 1.0]
+    D -->|No| F[Consulta Datos: police_allocation]
+    
+    F -->|Estadísticas de PNP del Distrito| G[API Gemini 2.0 Flash]
+    G -->|Triage JSON: Score, Prioridad, Falsa Alarma| H{¿Es Falsa Alarma?}
+    
+    H -->|Sí| I[Status: false_alarm & Penaliza Trust Score del Usuario]
+    H -->|No| J[Status: pending, priority: calculada, aiScore: asignado]
+    
+    E --> K[(Actualización en Firestore)]
+    J --> K
+    I --> K
+    
+    K -->|onSnapshot Suscripción| L[Mapa en Vivo y Dashboard del Agente]
+    L -->|Sirena Sonora Real-time| M[Web Audio API Alert]
 ```
 
 ---
 
-## 📊 Mapeo del Proceso de Calidad (ISO/IEC 25010)
+## 🛠️ Stack Tecnológico
 
-Para asegurar la robustez de "Vigía 54", se implementaron dinámicas transversales en el desarrollo asociadas a cuatro características clave del estándar de calidad de producto:
-
-| Característica | Subcaracterística | Estrategia de Control | Métrica / Herramienta Aplicada |
-| :--- | :--- | :--- | :--- |
-| **Adecuación Funcional** | Completitud funcional | Mapeo de historias de usuario y criterios de aceptación estrictos por sprint. | Suite de pruebas unitarias con Jest (Cobertura $> 80\%$). |
-| **Eficiencia de Desempeño** | Comportamiento temporal | Renderizado diferido de componentes cartográficos y geohashing compuesto en DB. | Tiempos de carga de consultas geoespaciales $< 3$~s. |
-| **Mantenibilidad** | Analizabilidad / Testabilidad | Análisis estático de código, cumplimiento de linters y tipados TypeScript. | Calificación grado **A** en SonarQube (Deuda técnica $\le 0.3\%$). |
-| **Seguridad** | Confidencialidad / Integridad | Cifrado TLS 1.3, anonimización de datos y Firebase Security Rules por rol de token JWT. | Políticas de acceso granulares en Firestore y Firebase Auth. |
-
----
-
-## 📋 Catálogo de Requisitos del Sistema
-
-El alcance funcional del prototipo se delimita a 8 Requisitos Funcionales catalogados por complejidad técnica y prioridad de negocio:
-
-### 1. Requisitos Funcionales (RF)
-
-| ID | Requisito Funcional | Descripción Técnica | Complejidad | Prioridad |
-| :--- | :--- | :--- | :---: | :---: |
-| **RF1** | Triaje Inteligente por IA | El sistema evalúa asíncronamente descripciones y fotos mediante la API de Google Gemini para clasificar incidentes y descartar spam. | Alta | Alta |
-| **RF2** | Motor Predictivo Geoespacial | Generación probabilística de cuadrantes de criminalidad en mapas utilizando clustering y geohashes. | Alta | Alta |
-| **RF3** | ETL de Datos Abiertos | Ingesta masiva y validación estructural de archivos CSV/JSON procedentes del Portal de Datos Abiertos del Perú. | Alta | Media |
-| **RF4** | Consultas Geoespaciales | Segmentación de incidencias en mapa dinámico por delito, distrito de Arequipa, horario y estado. | Media | Alta |
-| **RF5** | Dashboard Analítico | Consola policial que muestra gráficos interactivos agregados del comportamiento delictivo. | Media | Media |
-| **RF6** | Control de Acceso por Roles | Autenticación robusta diferenciando tres perfiles (Ciudadano, Agente y Administrador). | Media | Alta |
-| **RF7** | Gestión de Perfil | Permite configurar datos personales y preferencias de alertas geolocalizadas. | Baja | Media |
-| **RF8** | Formulario Manual | Formulario responsivo para reportes en campo con coordenadas del GPS nativo. | Baja | Alta |
-
-### 2. Requisitos No Funcionales (RNF)
-
-* **RNF1 (Seguridad - Confidencialidad):** Cifrado en tránsito HTTPS y TLS 1.3. Anonimización de los campos de identidad del ciudadano en Firestore.
-* **RNF2 (Eficiencia - Tiempo de Respuesta):** Tiempos de respuesta inferiores a 3 segundos para consultas geoespaciales optimizadas sobre índices compuestos.
-* **RNF3 (Usabilidad - Portabilidad):** Interfaz adaptativa desarrollada como PWA móvil/desktop, contraste mínimo de 4.5:1 y cacheo local offline básico.
+| Capa / Componente | Tecnología principal | Propósito y Ventajas |
+|---|---|---|
+| **Frontend / Cliente** | Next.js 15.3 (App Router) | Renderizado optimizado, PWA nativo y ruteo estático de alto rendimiento. |
+| **Estilos** | CSS Puro (Vanilla CSS Variables) | Máximo rendimiento gráfico sin sobrecarga de frameworks utilitarios. |
+| **Biblioteca UI** | React 19.0.0 | Renderizado reactivo rápido y soporte nativo para elementos asíncronos. |
+| **Estado Global** | Zustand | Almacenamiento ágil del estado de sesión, filtros de mapa y progreso ETL. |
+| **Visualización** | Leaflet + leaflet.heat | Mapas dinámicos con renderizado interactivo de mapas de calor en el cliente. |
+| **Estadísticas** | Recharts | Gráficos visuales interactivos de tendencias por hora, distrito y tipo de delito. |
+| **Backend Serverless**| Firebase Cloud Functions (Node.js 20) | Triggers asíncronos en la nube para triaje y automatización de analíticas. |
+| **Base de Datos** | Cloud Firestore | Base de datos NoSQL documental con actualizaciones asíncronas en tiempo real. |
+| **Autenticación** | Firebase Authentication | Seguridad en acceso con roles usando proveedores como Google y Correo. |
+| **Inteligencia Artificial**| Google Gemini 2.0 Flash API | Triaje semántico asíncrono, cálculo de prioridad y detección de spam. |
+| **Calidad / Pruebas** | Jest + Testing Library | Suite de pruebas automatizadas y reporte detallado de cobertura. |
 
 ---
 
-## 📅 Planificación Ágil (Scrum) y Sprints
+## 📋 Requisitos Funcionales y Especificación Técnica
 
-El desarrollo del proyecto se planificó y ejecutó en **8 semanas** mediante **4 Sprints** de 2 semanas de duración cada uno. Cada miembro del equipo asumió un compromiso mínimo de **4 horas diarias** de trabajo técnico (20 horas semanales).
+### `RF1` Triaje IA con Gemini
+* **Funcionamiento**: Al crearse un reporte en Firestore, se dispara una Cloud Function que consulta la distribución de fuerzas de la PNP asignadas a ese distrito (`police_allocation`). Envía esta información junto a la descripción ciudadana a Gemini 2.0 Flash. La IA devuelve un JSON estructurado con nivel de prioridad, confianza y justificación basada en la suficiencia de efectivos policiales locales.
 
+### `RF2` Motor Predictivo e Ingesta de Calor
+* **Funcionamiento**: Generación automática de mapas de calor a nivel de cliente segmentando los incidentes:
+  * **Zonas Calientes (Rojo/Naranja)**: Casos pendientes, en revisión y verificados.
+  * **Zonas Mitigadas (Verde)**: Casos marcados como resueltos.
+
+### `RF3` Pipeline de Ingesta y ETL
+* **Funcionamiento**: Panel administrativo para subir archivos CSV históricos de denuncias de delincuencia y despliegue policial de la PNP.
+  * **Optimización**: Procesa y sube registros en lotes de 20 para evitar estrangular las cuotas gratuitas de Firestore.
+  * **Georreferenciación inteligente**: Si los registros no tienen coordenadas de latitud/longitud exactas, el sistema calcula una desviación aleatoria dentro del radio real del distrito correspondiente de Arequipa Metropolitana.
+
+### `RF4` Filtrado Geoespacial
+* **Funcionamiento**: Sidebar de navegación interactivo con selectores por tipo de delito, distrito, rango horario (0-23) y filtros de fecha en tiempo real.
+
+### `RF5` Dashboard Analítico del Agente
+* **Funcionamiento**: Tablas detalladas de revisión de incidentes pendientes, panel de resolución y despacho de Serenazgo con un simulador sonoro sirena PWA implementado con **Web Audio API**.
+
+### `RF6` Autenticación y Control de Roles
+* **Funcionamiento**: Sistema granular de accesos protegido por `RoleGuard` a nivel de rutas estáticas y reglas de seguridad a nivel de base de datos para los roles de **Ciudadano**, **Agente Policial** y **Administrador**.
+
+### `RF7` Algoritmo de Reputación (Trust Score)
+* **Algoritmo**: Gestión de reputación del usuario para mitigar reportes maliciosos.
+  $$\text{Trust Score} = \frac{(\text{Reportes Verificados} \times 1.0) - (\text{Falsas Alarmas} \times 5.0)}{\text{Total de Reportes}} \times 100$$
+  * Si el puntaje disminuye por debajo de **30.0**, el usuario pierde el derecho a triaje automático (requiriendo revisión manual de sus envíos).
+
+---
+
+## 🔒 Seguridad en Base de Datos (Cloud Firestore Rules)
+
+La base de datos está protegida bajo un principio de privilegios mínimos basado en roles:
+* **Usuarios (`/users`)**: Un ciudadano ordinario solo puede leer y crear su propio documento. Únicamente puede editar campos no sensitivos (no puede modificar su propio rol, reputación o contador de alarmas falsas). Los agentes y administradores tienen acceso de lectura completo.
+* **Incidencias (`/reports`)**:
+  * Un ciudadano solo puede crear reportes en estado inicial `pending` (pendiente) y sin autovincularse un `aiScore`.
+  * Únicamente los administradores y agentes policiales (`isStaff()`) pueden cambiar el estado del reporte a verificado o resuelto.
+* **SOS (Transacción segura)**: Para evitar que un atacante simule ser policía y auto-verifique alarmas falsas, las alertas del **Botón SOS** se registran inicialmente como `pending` y con la bandera `isSos: true`. La Cloud Function intercepta la bandera en la nube y actualiza de forma segura el reporte a `verified` y `critical` usando privilegios administrativos de confianza (Admin SDK).
+
+---
+
+## 🧪 Demostración de Calidad (DevSecOps & CI)
+
+### 1. Auditoría de Seguridad Automatizada
+El flujo de integración continua realiza un escaneo de dependencias en búsqueda de vulnerabilidades conocidas.
+Puedes ejecutarlo localmente desde cualquiera de las carpetas principales (`/web` o `/firebase/functions`):
+```bash
+npm audit --audit-level=high
+```
+
+### 2. Pruebas Unitarias y Cobertura (Jest)
+Las funciones críticas del sistema (cálculo de reputación Trust Score, decodificación de geohashes y distancias con la fórmula de Haversine) cuentan con pruebas automatizadas Jest con una cobertura superior al **87%** en las clases core:
+```bash
+# Ejecutar localmente desde la carpeta /web
+npm run test:coverage
+```
+
+La tabla de cobertura en consola detalla el cubrimiento completo del algoritmo en `utils/`:
 ```text
-[Sprint 1: Sem 1-2] ──► [Sprint 2: Sem 3-4] ──► [Sprint 3: Sem 5-6] ──► [Sprint 4: Sem 7-8]
-  Setup, Auth (RF6)      ETL Datos (RF3)       Triaje con IA (RF1)    Motor Predictivo (RF2)
-  Reporte manual (RF8)   Filtro Mapa (RF4)     Dashboard (RF5)        Pruebas de estrés
-                         [Hito 1: Prototipo]                          [Hito 2: Software Final]
+PASS src/utils/geo.test.ts
+PASS src/utils/trustScore.test.ts
+--------------------------|---------|----------|---------|---------|-------------------
+File                      | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+--------------------------|---------|----------|---------|---------|-------------------
+All files                 |   10.61 |     4.61 |    3.78 |    8.66 |                   
+ utils                    |   96.72 |    90.24 |     100 |     100 |                   
+  geo.ts                  |   96.03 |    89.18 |     100 |     100 | 82-85             
+  trustScore.ts           |     100 |      100 |     100 |     100 |                   
+--------------------------|---------|----------|---------|---------|-------------------
 ```
+*Además, al correr este comando se genera una carpeta `/web/coverage/lcov-report/index.html` que puedes abrir en tu navegador para auditar visualmente las líneas cubiertas.*
 
 ---
 
-## ⚙️ Políticas de Gestión de Configuración (SCM)
+## 🚀 Despliegue en Producción
 
-### 1. Modelo de Ramas (Git Flow Adaptado)
-El proyecto utiliza un flujo de ramificación ordenado para garantizar que la rama `main` siempre represente el estado estable de producción:
-
-```mermaid
-gitGraph
-    commit id: "Initial commit"
-    branch develop
-    checkout develop
-    commit id: "setup: eslint & jest config"
-    branch feature/rf8-form
-    checkout feature/rf8-form
-    commit id: "feat(ui): add report form component"
-    commit id: "test(ui): add tests for form"
-    checkout develop
-    merge feature/rf8-form
-    commit id: "Merge PR #1 into develop"
-    checkout main
-    merge develop tag: "v1.0.0"
-```
-
-* **`main`**: Rama protegida. Solo recibe fusiones de código estabilizado y aprobado desde `develop` al final de cada Sprint.
-* **`develop`**: Rama base de integración de características.
-* **`feature/<rf-id>-<nombre>`**: Ramas de desarrollo de requisitos (e.g. `feature/rf1-triaje-ia`).
-* **`hotfix/<nombre-parche>`**: Parches urgentes para la rama principal.
-
-### 2. Convención de Mensajes de Commit
-Se adoptó el estándar de **Conventional Commits**:
-* `feat(alcance): descripción` (para nuevos requisitos, e.g. `feat(auth): configure firebase user roles`)
-* `fix(alcance): descripción` (corrección de errores, e.g. `fix(map): resolve Leaflet marker overlap`)
-* `test(alcance): descripción` (añadir suites de pruebas, e.g. `test(functions): add unit tests for Gemini handler`)
-* `docs(alcance): descripción` (documentación, e.g. `docs(scm): update project README`)
-* `chore(alcance): descripción` (mantenimiento, e.g. `chore(deps): update dependency packages`)
-
----
-
-## 🛡️ Flujo del Pipeline CI/CD (Quality Gates)
-
-Cada Pull Request hacia la rama `main` dispara automáticamente el pipeline de GitHub Actions configurado en `.github/workflows/main.yml`, validando el cumplimiento del *Quality Gate* antes del despliegue:
-
-```mermaid
-graph TD
-    classDef active fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0f172a;
-    classDef success fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d;
-    classDef fail fill:#fef2f2,stroke:#dc2626,stroke-width:2px,color:#7f1d1d;
-
-    Push[1. Git Push / PR a rama main]:::active --> Lint[2. Análisis Estático con ESLint]:::active
-    Lint --> Test[3. Pruebas Unitarias & Cobertura Jest]:::active
-    Test --> Sonar[4. Auditoría de Calidad en SonarQube]:::active
-    Sonar --> Gate{¿Supera la Puerta de Calidad?}:::active
-    Gate -->|Sí| Deploy[5. Despliegue Automático en Firebase]:::success
-    Gate -->|No| Reject[Rechazo de PR & Notificación]:::fail
-```
-
----
-
-## 🏆 Resultados de Aseguramiento de Calidad y Pruebas
-
-Los resultados del análisis del pipeline de calidad demostraron una excelente adherencia a los estándares y una baja deuda técnica:
-
-### 1. Métricas de Análisis Estático (SonarQube)
-
-| Métrica Auditada | Criterio / Umbral de Aceptación | Resultado Obtenido | Calificación |
-| :--- | :--- | :---: | :---: |
-| **Bugs** | 0 bugs críticos y bloqueantes en el código. | **0** | **Grado A** |
-| **Vulnerabilidades** | 0 fallos de seguridad detectados. | **0** | **Grado A** |
-| **Code Smells** | Menos de 15 incidencias menores de código. | **8** | **Grado A** |
-| **Duplicación** | Tasa de duplicación de líneas $< 3.0\%$. | **0.4%** | **Aprobado** |
-| **Deuda Técnica** | Tiempo estimado de remediación $< 5.0\%$. | **0.3%** | **Grado A** |
-
-### 2. Reporte de Cobertura de Código (Jest Test Suite)
-
-El plan de testing abarca pruebas sobre los componentes del cliente, los ganchos de estado de Zustand y el backend serverless de Cloud Functions:
-
-| Módulo del Sistema | Cobertura de Líneas | Cobertura de Ramas | Cobertura de Funciones | Estado |
-| :--- | :---: | :---: | :---: | :---: |
-| Componentes de Interfaz | $82.3\%$ | $75.0\%$ | $85.0\%$ | Aprobado |
-| Servicios y Estado (Zustand) | $91.2\%$ | $88.9\%$ | $100.0\%$ | Aprobado |
-| Cloud Functions (IA Pipeline) | $88.5\%$ | $80.0\%$ | $90.0\%$ | Aprobado |
-| **Promedio Global** | **87.33%** | **81.30%** | **91.67%** | **Aprobado** |
-
----
-
-## 🚀 Guía de Instalación y Despliegue Local
-
-### Requisitos Previos
-* **Node.js** v20.x o superior.
-* **Firebase CLI** instalado globalmente (`npm install -g firebase-tools`).
-
-### Configuración del Frontend
-1. Navega al directorio `web/`:
+### Frontend (Next.js Estático en Hosting)
+1. Compilar y exportar la aplicación Next.js:
    ```bash
    cd web
-   ```
-2. Instalar paquetes de dependencias:
-   ```bash
-   npm install
-   ```
-3. Configura las variables de entorno de Firebase en un archivo `.env.local` en la raíz de `web/`:
-   ```env
-   NEXT_PUBLIC_FIREBASE_API_KEY=tu_api_key
-   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=tu_auth_domain
-   NEXT_PUBLIC_FIREBASE_PROJECT_ID=tu_project_id
-   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=tu_storage_bucket
-   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=tu_sender_id
-   NEXT_PUBLIC_FIREBASE_APP_ID=tu_app_id
-   ```
-4. Levanta el servidor de desarrollo local:
-   ```bash
-   npm run dev
-   ```
-5. Abre la aplicación en [http://localhost:3000](http://localhost:3000) y la presentación en [http://localhost:3000/presentacion](http://localhost:3000/presentacion).
-
-### Configuración del Backend (Cloud Functions)
-1. Navega al directorio del backend:
-   ```bash
-   cd ../firebase/functions
-   ```
-2. Instala dependencias y compila el código TypeScript:
-   ```bash
-   npm install
    npm run build
    ```
-3. Inicia el simulador de base de datos y funciones locales:
+   Esto exporta la aplicación optimizada a la carpeta estática `web/out`.
+2. Copiar los archivos estáticos en la carpeta del proyecto de Firebase (para cumplir la restricción del CLI de Firebase):
    ```bash
-   firebase emulators:start
+   # En Windows
+   xcopy /s /e /y web\out firebase\web_out
    ```
 
-### Ejecutar Pruebas Automatizadas
-Para correr el suite de pruebas Jest y generar el reporte HTML de cobertura:
+### Desplegar a Firebase Cloud
+Una vez que el proyecto se encuentra compilado:
 ```bash
-cd web
-npm run test
-# Reporte detallado de cobertura
-npm run test -- --coverage
+cd firebase
+firebase deploy
 ```
+*Esto subirá automáticamente las reglas de seguridad de Firestore, los índices geoespaciales, las Cloud Functions y la aplicación estática a Firebase Hosting.*

@@ -1,39 +1,63 @@
 rules_version = '2';
+// ============================================================
+// VIGÍA 54 — Firestore Security Rules (RNF1)
+// Role-based access control via custom claims
+// ============================================================
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Función helper para verificar si el usuario logueado es administrador activo
-    function isAdmin() {
-      return request.auth != null && 
-        exists(/databases/$(database)/documents/administradores/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/administradores/$(request.auth.uid)).data.activo != false;
+
+    // ── Helper functions ────────────────────────────────────
+    function isSignedIn()  { return request.auth != null; }
+    function uid()         { return request.auth.uid; }
+    function role()        { return get(/databases/$(database)/documents/users/$(uid())).data.role; }
+    function isCiudadano() { return isSignedIn() && role() == 'ciudadano'; }
+    function isAgente()    { return isSignedIn() && role() == 'agente'; }
+    function isAdmin()     { return isSignedIn() && role() == 'admin'; }
+    function isStaff()     { return isAgente() || isAdmin(); }
+
+    // ── Users collection ────────────────────────────────────
+    match /users/{userId} {
+      // Any signed-in user can read their own doc
+      allow read: if isSignedIn() && uid() == userId;
+      // Agents and admins can read all users
+      allow read: if isStaff();
+      // Users can create their own doc on registration
+      allow create: if isSignedIn() && uid() == userId;
+      // Users can update their own profile (not role/trustScore)
+      allow update: if isSignedIn() && uid() == userId
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role','trustScore','falseAlarms','verifiedReports']);
+      // Only admins can update role
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
-    // Reglas para incidentes reportados
-    match /incidentes/{incidente} {
-      allow read: if true; // El mapa de la pantalla principal es de acceso público
-      allow create: if request.auth != null && request.resource.data.usuarioId == request.auth.uid;
-      allow update, delete: if isAdmin(); // Solo administradores de campo/sistema pueden actualizar o eliminar tickets
+    // ── Reports collection ──────────────────────────────────
+    match /reports/{reportId} {
+      // All authenticated users can read verified reports
+      allow read: if isSignedIn();
+      // Citizens can create reports (not set aiScore or status)
+      allow create: if isSignedIn()
+        && request.resource.data.authorId == uid()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.aiScore == null;
+      // Agents and admins can update status
+      allow update: if isStaff();
+      // Admins can delete
+      allow delete: if isAdmin();
+      // Allow Cloud Functions to write (via admin SDK, bypasses rules)
     }
-    
-    // Reglas para perfiles de ciudadanos
-    match /usuarios/{usuario} {
-      allow read: if request.auth != null; // Requiere autenticación para leer perfiles ajenos
-      allow write: if request.auth != null && request.auth.uid == usuario; // Solo el propio usuario puede modificar sus datos (ej. trust_score)
+
+    // ── Analytics collection ────────────────────────────────
+    match /analytics/{districtId} {
+      // Anyone can read analytics (public data)
+      allow read: if true;
+      // Only Cloud Functions (admin SDK) can write
+      allow write: if false;
     }
-    
-    // Reglas para administradores
-    match /administradores/{admin} {
-      allow read: if request.auth != null; // Para poder corroborar el rol en AuthContext
-      allow write: if request.auth != null && 
-        exists(/databases/$(database)/documents/administradores/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/administradores/$(request.auth.uid)).data.rol == "admin_sistema"; // Solo un superadmin puede crear/editar administradores
-    }
-    
-    // Reglas para unidades y patrullas de Arequipa
-    match /unidades/{unidad} {
-      allow read: if request.auth != null;
-      allow write: if isAdmin();
+
+    // ── ETL Jobs collection (admin only) ────────────────────
+    match /etl_jobs/{jobId} {
+      allow read, write: if isAdmin();
     }
   }
 }

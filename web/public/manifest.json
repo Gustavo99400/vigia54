@@ -1,21 +1,27 @@
 {
-  "name": "Vigía 54 — Arequipa Segura",
-  "short_name": "Vigía 54",
-  "description": "Plataforma de seguridad ciudadana con IA para Arequipa.",
+  "name": "Vigía 54",
+  "short_name": "Vigía54",
+  "description": "Sistema Inteligente de Predicción y Reporte de Incidencias Delictivas en Arequipa",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#0f172a",
+  "theme_color": "#1e4db7",
+  "orientation": "any",
   "icons": [
     {
       "src": "/icon-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "maskable any"
     },
     {
       "src": "/icon-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "maskable any"
     }
-  ]
+  ],
+  "categories": ["utilities", "security", "government"],
+  "lang": "es",
+  "dir": "ltr"
 }

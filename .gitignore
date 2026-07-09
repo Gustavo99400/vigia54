@@ -55,3 +55,5 @@ firebase/functions/.env
 # Firebase local hosting build and cache
 firebase/.firebase/
 firebase/public/
+firebase/web_out/
+.firebase/

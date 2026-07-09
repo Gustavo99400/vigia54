@@ -1,641 +1,560 @@
-"use client";
+'use client';
+// ============================================================
+// VIGÍA 54 — Admin Page (RF3 - ETL + RF6 - User Management)
+// ============================================================
+import { useState } from 'react';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { RoleGuard }   from '@/components/layout/RoleGuard';
+import { Sidebar }     from '@/components/layout/Sidebar';
+import { useAppStore } from '@/store/useAppStore';
+import type { AppUser, UserRole } from '@/types';
+import { Settings } from 'lucide-react';
 
-import { useState, useEffect, useRef } from "react";
-import { collection, onSnapshot, query, orderBy, getCountFromServer, where, addDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
-import { Activity, Cpu, AlertTriangle, Users, Database } from "lucide-react";
 
-function useCounter(target: number, duration = 1100) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    const start = Date.now();
-    const tick = () => {
-      const p = Math.min((Date.now() - start) / duration, 1);
-      setCount(Math.round(target * (1 - Math.pow(1 - p, 3))));
-      if (p < 1) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  }, [target, duration]);
-  return count;
+interface EtlState {
+  status: 'idle' | 'parsing' | 'uploading' | 'done' | 'error';
+  total: number;
+  loaded: number;
+  errors: string[];
+  fileName: string;
 }
 
-interface UserData { id: string; displayName?: string; reportes_total: number; reportes_verificados: number; falsas_alarmas: number; trust_score: number; }
-interface ETLRecord {
-  tipo: string;
-  latitude: number;
-  longitude: number;
-  descripcion?: string;
-}
-
-function TrustBadge({ score }: { score: number }) {
-  const cls = score > 80 ? "bg-emerald-500/12 text-emerald-400 border-emerald-500/25"
-    : score > 30 ? "bg-amber-500/12 text-amber-400 border-amber-500/25"
-    : "bg-red-500/12 text-red-400 border-red-500/25";
-  const icon = score > 80 ? "▲" : score > 30 ? "─" : "▼";
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${cls}`}>
-      {icon} {score.toFixed(0)}
-    </span>
-  );
-}
-
-type MetricIconName = "activity" | "cpu" | "alert";
-
-const METRIC_ICONS: Record<MetricIconName, React.ReactNode> = {
-  activity: <Activity size={16} strokeWidth={1.5} className="text-white/50" />,
-  cpu:      <Cpu      size={16} strokeWidth={1.5} className="text-white/50" />,
-  alert:    <AlertTriangle size={16} strokeWidth={1.5} className="text-white/50" />,
-};
-
-function MetricCard({ label, sublabel, value, unit, iconName, bar, barColor, delay }: {
-  label: string; sublabel: string; value: number; unit: string;
-  iconName: MetricIconName; bar: number; barColor: string; delay: number;
-}) {
-  const display = useCounter(Math.round(unit === "%" ? value * 10 : value));
-  const shown = unit === "%" ? (display / 10).toFixed(1) : display;
-  return (
-    <div className="metric-card animate-fade-in-up" style={{ animationDelay: `${delay}ms` }}>
-      <div className="flex items-start justify-between mb-5">
-        <div>
-          <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest">{label}</p>
-          <p className="text-[10px] text-white/15 mt-0.5">{sublabel}</p>
-        </div>
-        <div className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
-          {METRIC_ICONS[iconName]}
-        </div>
-      </div>
-      <div className="flex items-end gap-1.5 mb-4">
-        <span className="text-4xl font-bold text-white font-[family-name:var(--font-outfit)]">{shown}</span>
-        {unit && <span className="text-sm text-white/25 font-mono mb-1">{unit}</span>}
-      </div>
-      <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-1000 ease-out ${barColor}`} style={{ width: `${bar}%` }} />
-      </div>
-    </div>
-  );
-}
-
-const MOCK_INCIDENTS = [
-  { tipo: "robo_mano_armada", desc: "Robo al paso de celular con arma blanca en el Puente Bolognesi, Cercado.", lat: -16.4005, lng: -71.5385 },
-  { tipo: "robo_mano_armada", desc: "Asalto a transeúnte por dos delincuentes en motocicleta cerca del Óvalo Quiñones, Yanahuara.", lat: -16.4020, lng: -71.5490 },
-  { tipo: "accidente", desc: "Choque múltiple entre dos taxis y una combi de servicio público en la Av. Ejército, Cayma.", lat: -16.3955, lng: -71.5435 },
-  { tipo: "accidente", desc: "Atropello en Av. Alfonso Ugarte frente a la Universidad La Salle Arequipa.", lat: -16.4078, lng: -71.5471 },
-  { tipo: "vandalismo", desc: "Pintado de graffitis vandálicos en muros coloniales de la Plaza de Yanahuara.", lat: -16.3895, lng: -71.5418 },
-  { tipo: "vandalismo", desc: "Destrucción de mobiliario urbano (tachos de basura) en la Av. Lambramani cerca del parque público.", lat: -16.4210, lng: -71.5210 },
-  { tipo: "sospechoso", desc: "Sujetos en actitud sospechosa merodeando casas y observando cerraduras en la Urbanización Cayma.", lat: -16.3780, lng: -71.5450 },
-  { tipo: "sospechoso", desc: "Vehículo polarizado estacionado por más de 3 horas vigilando un banco en la Av. Dolores, Bustamante.", lat: -16.4250, lng: -71.5310 },
-  { tipo: "choque", desc: "Colisión frontal entre dos autos particulares bloqueando el tránsito en el Puente Bolognesi.", lat: -16.4005, lng: -71.5385 },
-  { tipo: "incendio", desc: "Incendio estructural de mediana proporción en local comercial de la Av. Ejército, Cayma. Bomberos en ruta.", lat: -16.3932, lng: -71.5451 },
-  { tipo: "derrumbe", desc: "Derrumbe de piedras y tierra bloqueando parcialmente la vía en la bajada de la Av. Arancota.", lat: -16.4350, lng: -71.5580 },
+const DISTRICTS = [
+  'Cercado','Cayma','Yanahuara','Miraflores','Mariano Melgar',
+  'Paucarpata','Socabaya','Hunter','J.L. Bustamante','Alto Selva Alegre',
 ];
 
-function getSimulatedData(tipo: string) {
-  const templates = MOCK_INCIDENTS.filter((item) => item.tipo === tipo);
-  const template = templates[Math.floor(Math.random() * templates.length)] || MOCK_INCIDENTS[0];
-  const offsetLat = (Math.random() * 0.002 - 0.001);
-  const offsetLng = (Math.random() * 0.002 - 0.001);
+const DISTRICT_COORDINATES: Record<string, { lat: number; lng: number; radius: number }> = {
+  'CERCADO': { lat: -16.3988, lng: -71.5369, radius: 0.015 },
+  'AREQUIPA': { lat: -16.3988, lng: -71.5369, radius: 0.015 },
+  'CAYMA': { lat: -16.3742, lng: -71.5586, radius: 0.02 },
+  'YANAHUARA': { lat: -16.3881, lng: -71.5414, radius: 0.01 },
+  'MIRAFLORES': { lat: -16.3853, lng: -71.5175, radius: 0.012 },
+  'MARIANO MELGAR': { lat: -16.3869, lng: -71.5111, radius: 0.01 },
+  'PAUCARPATA': { lat: -16.4250, lng: -71.5035, radius: 0.018 },
+  'SOCABAYA': { lat: -16.4633, lng: -71.5283, radius: 0.02 },
+  'HUNTER': { lat: -16.4428, lng: -71.5492, radius: 0.012 },
+  'JACOBO HUNTER': { lat: -16.4428, lng: -71.5492, radius: 0.012 },
+  'CERRO COLORADO': { lat: -16.3686, lng: -71.5583, radius: 0.025 },
+  'J.L. BUSTAMANTE': { lat: -16.4275, lng: -71.5236, radius: 0.012 },
+  'JOSE LUIS BUSTAMANTE Y RIVERO': { lat: -16.4275, lng: -71.5236, radius: 0.012 },
+  'ALTO SELVA ALEGRE': { lat: -16.3764, lng: -71.5186, radius: 0.015 },
+  'LA JOYA': { lat: -16.5886, lng: -71.9056, radius: 0.04 },
+  'YURA': { lat: -16.2522, lng: -71.6797, radius: 0.03 },
+  'TIABAYA': { lat: -16.4428, lng: -71.5878, radius: 0.015 },
+  'SACHACA': { lat: -16.4258, lng: -71.5658, radius: 0.015 },
+  'CHARACATO': { lat: -16.4719, lng: -71.4981, radius: 0.02 },
+  'UCHUMAYO': { lat: -16.4258, lng: -71.6761, radius: 0.03 },
+  'MOLLEBAYA': { lat: -16.4897, lng: -71.4586, radius: 0.015 },
+  'SABANDIA': { lat: -16.4597, lng: -71.5019, radius: 0.012 },
+  'QUEQUEÑA': { lat: -16.5564, lng: -71.4503, radius: 0.015 },
+  'YARABAMBA': { lat: -16.5458, lng: -71.4806, radius: 0.02 },
+  'CHIGUATA': { lat: -16.4022, lng: -71.3986, radius: 0.03 },
+  'VITOR': { lat: -16.4178, lng: -71.9286, radius: 0.04 }
+};
+
+function getRandomCoordinatesForDistrict(districtName: string): { lat: number; lng: number } {
+  const normalized = districtName.trim().toUpperCase();
+  const config = DISTRICT_COORDINATES[normalized] || { lat: -16.3988, lng: -71.5369, radius: 0.03 };
+  
+  const u = Math.random();
+  const v = Math.random();
+  const theta = u * 2.0 * Math.PI;
+  const r = Math.sqrt(v) * config.radius;
+  
   return {
-    tipo: template.tipo,
-    descripcion: template.desc,
-    latitude: template.lat + offsetLat,
-    longitude: template.lng + offsetLng
+    lat: config.lat + r * Math.sin(theta),
+    lng: config.lng + r * Math.cos(theta),
   };
 }
 
-function getBurstSimulatedData(count: number) {
-  const results = [];
-  for (let i = 0; i < count; i++) {
-    const template = MOCK_INCIDENTS[Math.floor(Math.random() * MOCK_INCIDENTS.length)];
-    const offsetLat = (Math.random() * 0.003 - 0.0015);
-    const offsetLng = (Math.random() * 0.003 - 0.0015);
-    results.push({
-      tipo: template.tipo,
-      descripcion: template.desc,
-      latitude: template.lat + offsetLat,
-      longitude: template.lng + offsetLng
-    });
+function mapModalidadToCrimeType(modality: string): 'robo' | 'hurto' | 'violencia' {
+  const m = modality.toLowerCase().trim();
+  if (m.includes('rob')) return 'robo';
+  if (m.includes('hur')) return 'hurto';
+  if (
+    m.includes('viol') ||
+    m.includes('agre') ||
+    m.includes('les') ||
+    m.includes('hom') ||
+    m.includes('fami') ||
+    m.includes('sex') ||
+    m.includes('secues')
+  ) {
+    return 'violencia';
   }
-  return results;
+  if (m.includes('estafa') || m.includes('extor') || m.includes('usurp') || m.includes('recept')) {
+    return Math.random() > 0.5 ? 'robo' : 'hurto';
+  }
+  const types = ['robo', 'hurto', 'violencia'] as const;
+  return types[Math.floor(Math.random() * types.length)];
+}
+
+function parseCSVLine(line: string, delimiter: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === delimiter && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim());
+  return result.map(v => v.replace(/^"|"$/g, '').trim());
 }
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<"metrics" | "trust" | "etl" | "simulador">("metrics");
-  const [users, setUsers] = useState<UserData[]>([]);
-  const [totalInc, setTotalInc] = useState(0);
-  const [verified, setVerified] = useState(0);
-  const [falseAlarms, setFalseAlarms] = useState(0);
-  const loaded = useRef(false);
+  const { showNotification, etlProgress, setEtlProgress } = useAppStore();
+  const etl = etlProgress || { status: 'idle', total: 0, loaded: 0, errors: [], fileName: '' };
+  const setEtl = setEtlProgress;
+  const [users, setUsers]   = useState<AppUser[]>([]);
+  const [usersLoaded, setUsersLoaded] = useState(false);
+  const [activeTab, setActiveTab] = useState<'etl' | 'users'>('etl');
+  const [etlType, setEtlType] = useState<'reports' | 'police'>('reports');
+  const [clearing, setClearing] = useState(false);
 
-  // ETL states
-  const [etlInput, setEtlInput] = useState("");
-  const [etlStatus, setEtlStatus] = useState<"idle" | "valid" | "error">("idle");
-  const [etlMessage, setEtlMessage] = useState("");
-  const [parsedRecords, setParsedRecords] = useState<ETLRecord[]>([]);
-  const [importing, setImporting] = useState(false);
-
-  // Simulation states
-  const [simulating, setSimulating] = useState(false);
-  const [simulationLog, setSimulationLog] = useState("");
-
-  const triggerSimulation = async (tipo: string) => {
-    setSimulating(true);
-    setSimulationLog("Iniciando simulación de incidente...");
+  async function clearImportedData() {
+    if (!confirm('¿Estás seguro de que deseas eliminar todas las incidencias importadas de la base de datos? Esto limpiará el mapa de calor de registros antiguos.')) return;
+    setClearing(true);
     try {
-      const data = getSimulatedData(tipo);
-      await addDoc(collection(db, "incidentes"), {
-        tipo: data.tipo,
-        descripcion: data.descripcion,
-        ubicacion: {
-          latitude: data.latitude,
-          longitude: data.longitude,
-          geohash: `${data.latitude.toFixed(3)}_${data.longitude.toFixed(3)}`
-        },
-        evidencia: { fotoUrl: null, audioUrl: null },
-        estado: "revision_ia",
-        prioridad: data.tipo === "robo_mano_armada" ? 1 : data.tipo === "accidente" ? 2 : 3,
-        timestamp: serverTimestamp(),
-        usuarioId: auth.currentUser?.uid || "simulador_produccion"
-      });
-
-      setSimulationLog(`[EXITOSO] Incidente inyectado en Firestore:
-Tipo: ${data.tipo.replace(/_/g, " ")}
-Descripción: ${data.descripcion}
-Coordenadas: ${data.latitude.toFixed(5)}, ${data.longitude.toFixed(5)}
-Hora: ${new Date().toLocaleTimeString()}
-Gatillando pipeline de IA...`);
-      await refreshCounts();
-    } catch (error: unknown) {
-      const err = error as { message?: string };
-      setSimulationLog(`[ERROR] No se pudo simular el incidente: ${err.message || String(error)}`);
-    } finally {
-      setSimulating(false);
-    }
-  };
-
-  const triggerBurstSimulation = async () => {
-    setSimulating(true);
-    setSimulationLog("Iniciando ráfaga de 5 incidentes simultáneos...");
-    try {
-      const burstData = getBurstSimulatedData(5);
-      let logs = "";
-      for (const data of burstData) {
-        await addDoc(collection(db, "incidentes"), {
-          tipo: data.tipo,
-          descripcion: data.descripcion,
-          ubicacion: {
-            latitude: data.latitude,
-            longitude: data.longitude,
-            geohash: `${data.latitude.toFixed(3)}_${data.longitude.toFixed(3)}`
-          },
-          evidencia: { fotoUrl: null, audioUrl: null },
-          estado: "revision_ia",
-          prioridad: data.tipo === "robo_mano_armada" ? 1 : data.tipo === "accidente" ? 2 : 3,
-          timestamp: serverTimestamp(),
-          usuarioId: auth.currentUser?.uid || "simulador_produccion"
-        });
-
-        logs += `• ${data.tipo.replace(/_/g, " ")} en ${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}\n`;
-      }
-      setSimulationLog(`[EXITOSO] Ráfaga completada con éxito. Inyectados:\n${logs}`);
-      await refreshCounts();
-    } catch (error: unknown) {
-      const err = error as { message?: string };
-      setSimulationLog(`[ERROR] No se pudo completar la ráfaga: ${err.message || String(error)}`);
-    } finally {
-      setSimulating(false);
-    }
-  };
-
-  useEffect(() => {
-    return onSnapshot(
-      query(collection(db, "usuarios"), orderBy("trust_score", "desc")),
-      (snap) => setUsers(snap.docs.map((d) => {
-        const data = d.data();
-        return { id: d.id, displayName: data.displayName || d.id.substring(0, 8),
-          reportes_total: data.reportes_total || 0, reportes_verificados: data.reportes_verificados || 0,
-          falsas_alarmas: data.falsas_alarmas || 0, trust_score: data.trust_score ?? 100 };
-      }))
-    );
-  }, []);
-
-  const refreshCounts = async () => {
-    try {
-      const [tot, ver, fal] = await Promise.all([
-        getCountFromServer(collection(db, "incidentes")),
-        getCountFromServer(query(collection(db, "incidentes"), where("estado", "==", "verificado"))),
-        getCountFromServer(query(collection(db, "incidentes"), where("estado", "==", "falsa_alarma"))),
-      ]);
-      setTotalInc(tot.data().count);
-      setVerified(ver.data().count);
-      setFalseAlarms(fal.data().count);
-    } catch (e) { console.error(e); }
-  };
-
-  useEffect(() => {
-    if (loaded.current) return;
-    loaded.current = true;
-    refreshCounts();
-  }, []);
-
-  // suppress unused warning
-  void verified;
-
-  const accuracy = totalInc > 0 ? ((totalInc - falseAlarms) / totalInc) * 100 : 100;
-
-  const metrics: { label: string; sublabel: string; value: number; unit: string; iconName: MetricIconName; bar: number; barColor: string }[] = [
-    { label: "Total Incidentes", sublabel: "Firestore · Tiempo Real", value: totalInc,   unit: "", iconName: "activity", bar: Math.min(totalInc * 10, 100), barColor: "bg-emerald-400" },
-    { label: "Precisión IA",     sublabel: "Reportes válidos / total", value: accuracy,   unit: "%", iconName: "cpu",      bar: accuracy, barColor: "bg-white" },
-    { label: "Falsas Alarmas",   sublabel: "Reportes descartados",     value: falseAlarms, unit: "", iconName: "alert",    bar: totalInc > 0 ? (falseAlarms / totalInc) * 100 : 0, barColor: "bg-red-500" },
-  ];
-
-  const TABS = [
-    { key: "metrics" as const, label: "Infraestructura", Icon: Activity },
-    { key: "trust"   as const, label: "Trust Score",     Icon: Users },
-    { key: "etl"     as const, label: "Ingesta ETL",     Icon: Database },
-    { key: "simulador" as const, label: "Simulador Live", Icon: AlertTriangle },
-  ];
-
-  const handleValidateETL = () => {
-    if (!etlInput.trim()) {
-      setEtlStatus("error");
-      setEtlMessage("Por favor pegue o cargue un dataset válido.");
-      setParsedRecords([]);
-      return;
-    }
-
-    try {
-      let records: ETLRecord[] = [];
-      const input = etlInput.trim();
-
-      // Check if it's JSON
-      if (input.startsWith("[") || input.startsWith("{")) {
-        const parsed = JSON.parse(input);
-        records = Array.isArray(parsed) ? parsed : [parsed];
-      } else {
-        // CSV parsing
-        const lines = input.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-        if (lines.length < 2) {
-          throw new Error("El CSV debe tener al menos una cabecera y una línea de datos.");
-        }
-
-        const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
-        const requiredHeaders = ["tipo", "latitude", "longitude"];
-        const missing = requiredHeaders.filter(req => !headers.includes(req));
-        if (missing.length > 0) {
-          throw new Error(`Faltan las cabeceras requeridas: ${missing.join(", ")}`);
-        }
-
-        const tipoIdx = headers.indexOf("tipo");
-        const latIdx = headers.indexOf("latitude");
-        const lngIdx = headers.indexOf("longitude");
-        const descIdx = headers.indexOf("descripcion");
-
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(",").map(c => c.trim());
-          if (cols.length < requiredHeaders.length) continue; // skip malformed lines
-
-          const lat = parseFloat(cols[latIdx]);
-          const lng = parseFloat(cols[lngIdx]);
-          if (isNaN(lat) || isNaN(lng)) {
-            throw new Error(`Coordenadas inválidas en la línea ${i + 1}: lat=${cols[latIdx]}, lng=${cols[lngIdx]}`);
-          }
-
-          records.push({
-            tipo: cols[tipoIdx] || "sospechoso",
-            latitude: lat,
-            longitude: lng,
-            descripcion: descIdx !== -1 ? cols[descIdx] || "" : ""
-          });
-        }
-      }
-
-      // Final verification of records
-      if (records.length === 0) {
-        throw new Error("No se encontraron registros válidos para importar.");
-      }
-
-      // Check types are valid
-      const validTypes = ["robo_mano_armada", "vandalismo", "sospechoso", "accidente"];
-      records.forEach((r, idx) => {
-        if (!validTypes.includes(r.tipo)) {
-          r.tipo = "sospechoso"; // default fallback
-        }
-        if (typeof r.latitude !== "number" || typeof r.longitude !== "number" || isNaN(r.latitude) || isNaN(r.longitude)) {
-          throw new Error(`Registro #${idx + 1} tiene coordenadas inválidas.`);
-        }
-      });
-
-      setParsedRecords(records);
-      setEtlStatus("valid");
-      setEtlMessage(`¡Dataset verificado con éxito! Se encontraron ${records.length} registros listos para importar.`);
-    } catch (error: unknown) {
-      const err = error as { message?: string };
-      setEtlStatus("error");
-      setEtlMessage(`Error de Validación: ${err.message || String(error)}`);
-      setParsedRecords([]);
-    }
-  };
-
-  const handleLoadSampleData = () => {
-    const sample = `tipo,latitude,longitude,descripcion
-robo_mano_armada,-16.4078,-71.5471,Robo frustrado cerca de la Universidad La Salle Arequipa
-vandalismo,-16.3988,-71.5369,Graffiti vandálico en la Plaza de Armas
-accidente,-16.4222,-71.5173,Colisión de taxi en las inmediaciones de Mall Aventura Arequipa
-sospechoso,-16.4055,-71.5460,Persona merodeando vehículos estacionados en Av Alfonso Ugarte
-robo_mano_armada,-16.4032,-71.5420,Asalto a transeúnte en Av Bolognesi`;
-    setEtlInput(sample);
-    setEtlStatus("idle");
-    setEtlMessage("Se ha cargado un dataset de muestra para Arequipa. Presione 'Validar Esquema' para procesar.");
-    setParsedRecords([]);
-  };
-
-  const handleImportETL = async () => {
-    if (parsedRecords.length === 0) return;
-    setImporting(true);
-    setEtlMessage("Importando registros a Firestore...");
-
-    try {
-      let count = 0;
-      for (const rec of parsedRecords) {
-        await addDoc(collection(db, "incidentes"), {
-          tipo: rec.tipo,
-          descripcion: rec.descripcion || null,
-          ubicacion: {
-            latitude: rec.latitude,
-            longitude: rec.longitude,
-            geohash: `${rec.latitude.toFixed(3)}_${rec.longitude.toFixed(3)}`
-          },
-          evidencia: { fotoUrl: null, audioUrl: null, ia_score: 0.8 },
-          estado: "verificado",
-          prioridad: rec.tipo === "robo_mano_armada" ? 1 : rec.tipo === "accidente" ? 2 : 3,
-          timestamp: serverTimestamp(),
-          usuarioId: "pnp_open_data"
-        });
-        count++;
-      }
-      setEtlStatus("idle");
-      setEtlMessage(`¡Éxito! Se han importado ${count} incidentes históricos a Firestore.`);
-      setParsedRecords([]);
-      setEtlInput("");
+      const { getDocs, query, collection, where, writeBatch, doc } = await import('firebase/firestore');
+      const q = query(collection(db, 'reports'), where('source', '==', 'open_data_etl'));
+      const snap = await getDocs(q);
       
-      // Refresh count values
-      await refreshCounts();
-    } catch (error: unknown) {
-      const err = error as { message?: string };
-      setEtlStatus("error");
-      setEtlMessage(`Error al importar: ${err.message || String(error)}`);
+      if (snap.empty) {
+        showNotification('info', 'No hay incidencias importadas para eliminar.');
+        setClearing(false);
+        return;
+      }
+
+      const docs = snap.docs;
+      let deletedCount = 0;
+
+      while (deletedCount < docs.length) {
+        const batch = writeBatch(db);
+        const chunk = docs.slice(deletedCount, deletedCount + 400);
+        chunk.forEach(d => {
+          batch.delete(doc(db, 'reports', d.id));
+        });
+        await batch.commit();
+        deletedCount += chunk.length;
+      }
+
+      showNotification('success', `Se eliminaron ${deletedCount} incidencias importadas con éxito.`);
+    } catch (err) {
+      console.error('Error clearing data:', err);
+      showNotification('error', 'Error al eliminar datos importados.');
     } finally {
-      setImporting(false);
+      setClearing(false);
     }
-  };
+  }
+
+  // ── ETL: parse and upload CSV (RF3) ───────────────────────
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setEtl({ status: 'parsing', total: 0, loaded: 0, errors: [], fileName: file.name });
+
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(Boolean);
+      const rows = lines.slice(1);
+
+      if (etlType === 'reports') {
+        const cleanHeaderLine = lines[0].replace(/^\uFEFF/, '').trim();
+        const delimiter = cleanHeaderLine.includes(';') ? ';' : ',';
+        const header = parseCSVLine(cleanHeaderLine, delimiter).map(h => h.trim().toLowerCase());
+        const isNewFormat = header.includes('dist_hecho') || header.includes('dpto_hecho_new');
+
+        setEtl(s => ({ ...s, status: 'uploading', total: rows.length }));
+
+        const { addDoc, collection: col, serverTimestamp } = await import('firebase/firestore');
+        const { encodeGeohash } = await import('@/utils/geo');
+
+        let loaded = 0;
+        const errors: string[] = [];
+        const batchSize = 20;
+
+        for (let i = 0; i < rows.length; i += batchSize) {
+          if (loaded >= 200) break;
+
+          const batch = rows.slice(i, i + batchSize);
+          await Promise.all(batch.map(async (line, idx) => {
+            try {
+              if (loaded >= 200) return;
+              const cleanLine = line.replace(/\r/g, '').trim();
+              const values = parseCSVLine(cleanLine, delimiter);
+              const row: Record<string, string> = {};
+              header.forEach((h, j) => { row[h] = values[j] ?? ''; });
+
+              const distCol = isNewFormat ? 'dist_hecho' : 'distrito';
+              const dist = row[distCol] ?? '';
+              const normalizedDist = dist.trim().toUpperCase();
+
+              // Descartar si el departamento o provincia no es Arequipa en el nuevo formato
+              if (isNewFormat) {
+                const dpto = (row['dpto_hecho_new'] || '').trim().toUpperCase();
+                const prov = (row['prov_hecho'] || '').trim().toUpperCase();
+                if (dpto !== 'AREQUIPA' || prov !== 'AREQUIPA') return;
+              }
+
+              // Descartar si el distrito no pertenece a Arequipa
+              if (!DISTRICT_COORDINATES[normalizedDist]) {
+                return;
+              }
+
+              let lat = 0;
+              let lng = 0;
+              if (!isNewFormat) {
+                lat = parseFloat(row['latitud'] ?? row['lat'] ?? '');
+                lng = parseFloat(row['longitud'] ?? row['lng'] ?? '');
+              }
+
+              const typeCol = isNewFormat ? 'p_modalidades' : 'tipo';
+              const rawType = row[typeCol] ?? row['delito'] ?? 'otro';
+              const finalType = mapModalidadToCrimeType(rawType);
+
+              const year = parseInt(row['anio'] ?? row['año'] ?? row['anio'] ?? new Date().getFullYear().toString());
+              const month = parseInt(row['mes'] ?? '1');
+              const dateStr = isNewFormat 
+                ? new Date(year, month - 1, 15).toISOString() 
+                : (row['fecha'] ?? new Date().toISOString());
+
+              const qty = isNewFormat ? (parseInt(row['cantidad']) || 1) : 1;
+              const uploadCount = Math.min(qty, 3); // Limitar a máximo 3 reportes por fila para seguridad y optimización de cuotas
+
+              const { GeoPoint } = await import('firebase/firestore');
+
+              for (let c = 0; c < uploadCount; c++) {
+                let finalLat = lat;
+                let finalLng = lng;
+                
+                if (isNewFormat || isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) {
+                  const coords = getRandomCoordinatesForDistrict(dist);
+                  finalLat = coords.lat;
+                  finalLng = coords.lng;
+                }
+
+                await addDoc(col(db, 'reports'), {
+                  authorId:    'etl_import',
+                  type:        finalType,
+                  description: row['descripcion'] ?? `Importado desde datos abiertos: ${rawType}`,
+                  location:    new GeoPoint(finalLat, finalLng),
+                  geohash:     encodeGeohash(finalLat, finalLng),
+                  district:    dist,
+                  timestamp:   new Date(dateStr),
+                  status:      'pending',
+                  mediaUrls:   [],
+                  priority:    'low',
+                  hour:        isNewFormat ? 12 : (new Date(dateStr).getHours() || 12),
+                  aiScore:     null,
+                  source:      'open_data_etl',
+                });
+                loaded++;
+              }
+            } catch (err) {
+              errors.push(`Fila ${i + idx + 2}: ${String(err)}`);
+            }
+          }));
+          setEtl(s => ({ ...s, loaded: Math.min(loaded, rows.length), errors }));
+        }
+
+        setEtl(s => ({ ...s, status: 'done', loaded, errors }));
+        showNotification('success', `ETL completado: ${loaded}/${rows.length} registros importados.`);
+      } else {
+        // Ingesta de personal policial con agregación al vuelo
+        const header = lines[0].split(',').map(h => h.trim().toUpperCase());
+        const aggregations: Record<string, any> = {};
+
+        rows.forEach((line) => {
+          try {
+            const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+            const row: Record<string, string> = {};
+            header.forEach((h, j) => { row[h] = values[j] ?? ''; });
+
+            const dist = row['DISTRITO']?.toUpperCase()?.trim();
+            if (!dist || !DISTRICT_COORDINATES[dist]) return;
+
+            const qty = parseInt(row['CANTIDAD']) || 0;
+            if (qty <= 0) return;
+
+            if (!aggregations[dist]) {
+              aggregations[dist] = {
+                total: 0,
+                oficial: 0,
+                suboficial: 0,
+                armas: 0,
+                servicios: 0,
+                operativo: 0,
+                administrativo: 0,
+                masculino: 0,
+                femenino: 0,
+                provincia: row['PROVINCIA'] || '',
+                departamento: row['DEPARTAMENTO'] || '',
+              };
+            }
+
+            const agg = aggregations[dist];
+            agg.total += qty;
+
+            const cat = row['CATEGORIA_OFI_SUB']?.toUpperCase() || '';
+            if (cat.includes('OFICIAL')) agg.oficial += qty;
+            if (cat.includes('SUB')) agg.suboficial += qty;
+
+            const arm = row['CATEGORIA_ARM_SERV']?.toUpperCase() || '';
+            if (arm.includes('ARMAS')) agg.armas += qty;
+            if (arm.includes('SERV')) agg.servicios += qty;
+
+            const func = row['FUNCION']?.toUpperCase() || '';
+            if (func.includes('OPE')) agg.operativo += qty;
+            if (func.includes('ADM')) agg.administrativo += qty;
+
+            const sexo = row['SEXO']?.toUpperCase() || '';
+            if (sexo.includes('MAS')) agg.masculino += qty;
+            if (sexo.includes('FEM')) agg.femenino += qty;
+          } catch (e) {
+            // Ignorar filas malformadas en parseo inicial
+          }
+        });
+
+        const keys = Object.keys(aggregations);
+        setEtl(s => ({ ...s, status: 'uploading', total: keys.length, loaded: 0 }));
+
+        const { doc, setDoc } = await import('firebase/firestore');
+        let loaded = 0;
+        const errors: string[] = [];
+        const batchSize = 10;
+
+        for (let i = 0; i < keys.length; i += batchSize) {
+          const batch = keys.slice(i, i + batchSize);
+          await Promise.all(batch.map(async (dist) => {
+            try {
+              const ref = doc(db, 'police_allocation', dist);
+              await setDoc(ref, aggregations[dist]);
+              loaded++;
+            } catch (err) {
+              errors.push(`Error en distrito ${dist}: ${String(err)}`);
+            }
+          }));
+          setEtl(s => ({ ...s, loaded: Math.min(loaded, keys.length), errors }));
+        }
+
+        setEtl(s => ({ ...s, status: 'done', loaded, errors }));
+        showNotification('success', `ETL completado: ${loaded} distritos guardados con agregación policial.`);
+      }
+    } catch (err) {
+      setEtl(s => ({ ...s, status: 'error', errors: [String(err)] }));
+      showNotification('error', 'Error procesando el archivo.');
+    }
+  }
+
+  // ── Load users (RF6) ──────────────────────────────────────
+  async function loadUsers() {
+    const snap = await getDocs(collection(db, 'users'));
+    const list: AppUser[] = snap.docs.map(d => ({ uid: d.id, ...(d.data() as Omit<AppUser,'uid'>) }));
+    setUsers(list);
+    setUsersLoaded(true);
+  }
+
+  async function changeRole(uid: string, role: UserRole) {
+    await updateDoc(doc(db, 'users', uid), { role });
+    setUsers(u => u.map(user => user.uid === uid ? { ...user, role } : user));
+    showNotification('success', `Rol actualizado a: ${role}`);
+  }
 
   return (
-    <div className="space-y-6 md:space-y-8">
-
-      {/* Tab switcher */}
-      <div className="tab-switcher">
-        {TABS.map((tab) => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            className={`tab-switch-btn ${activeTab === tab.key ? "active" : ""}`}>
-            <tab.Icon size={14} strokeWidth={1.75} />
-            <span className="hidden sm:inline">{tab.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Metrics */}
-      {activeTab === "metrics" && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {metrics.map((m, i) => <MetricCard key={m.label} {...m} delay={i * 100} />)}
-        </div>
-      )}
-
-      {/* Trust Score */}
-      {activeTab === "trust" && (
-        <div className="space-y-4 animate-fade-in">
-          {/* Formula */}
-          <div className="metric-card">
-            <h2 className="text-[13px] font-bold text-white font-[family-name:var(--font-outfit)] mb-3">Algoritmo de Confianza</h2>
-            <div className="bg-black/50 rounded-xl px-4 py-3 border border-white/[0.04] font-mono text-[11px] text-white/35 leading-relaxed">
-              TS = ((Σ Verificados × 1.0) − (Σ Falsas Alarmas × 5.0)) ÷ Total × 100
+    <RoleGuard allowedRoles={['admin']}>
+      <div className="page-wrapper">
+        <Sidebar />
+        <div className="main-content">
+          <header className="topbar">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Settings size={20} strokeWidth={2} style={{ color: '#60a5fa' }} />
+              <span className="topbar-title">Panel Administrador</span>
             </div>
-          </div>
+            <span className="badge badge-danger">Admin</span>
+          </header>
 
-          {/* Users table */}
-          <div className="metric-card !p-0 overflow-hidden">
-            {users.length === 0 ? (
-              <div className="p-10 text-center space-y-2">
-                <Users size={32} strokeWidth={1} className="opacity-20 text-white mx-auto" />
-                <p className="text-sm text-white/25">Sin usuarios registrados</p>
-                <p className="text-[10px] text-white/15">Aparecerán al iniciar sesión</p>
+          <div className="page-inner">
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: '1.5rem' }}>
+              {(['etl','users'] as const).map(tab => (
+                <button key={tab} className={`btn ${activeTab === tab ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => { setActiveTab(tab); if (tab === 'users' && !usersLoaded) loadUsers(); }}>
+                  {tab === 'etl' ? '📥 Ingesta de Datos (RF3)' : '👥 Usuarios (RF6)'}
+                </button>
+              ))}
+            </div>
+
+            {/* ETL Tab */}
+            {activeTab === 'etl' && (
+              <div className="card animate-fade-in">
+                <h2 style={{ marginBottom: '0.5rem' }}>Ingesta de Datos Abiertos</h2>
+                <p style={{ marginBottom: '1.5rem', color: 'var(--text-muted)' }}>
+                  Carga el archivo CSV del Portal Nacional de Datos Abiertos (datosabiertos.gob.pe). 
+                  El sistema validará, procesará y cargará los registros de forma automatizada.
+                </p>
+
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label className="form-label" htmlFor="etl-type">Tipo de Datos a Cargar</label>
+                  <select
+                    id="etl-type"
+                    className="form-input"
+                    value={etlType}
+                    onChange={(e) => setEtlType(e.target.value as any)}
+                    disabled={etl.status === 'parsing' || etl.status === 'uploading'}
+                    style={{ marginBottom: '1rem', background: 'var(--bg-main)' }}
+                  >
+                    <option value="reports">📋 Histórico de Incidencias / Denuncias (PNP)</option>
+                    <option value="police">👮 Despliegue de Personal Policial (PNP)</option>
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label className="form-label" htmlFor="etl-file">
+                    Archivo CSV / JSON <span style={{ color: 'var(--text-muted)' }}>(máx 50MB)</span>
+                  </label>
+                  <input
+                    id="etl-file"
+                    type="file"
+                    className="form-input"
+                    accept=".csv,.json"
+                    onChange={handleFileUpload}
+                    disabled={etl.status === 'parsing' || etl.status === 'uploading'}
+                  />
+                  <span className="form-hint">
+                    {etlType === 'reports' ? (
+                      <>Columnas esperadas: <code>latitud, longitud, tipo, distrito, fecha, descripcion</code></>
+                    ) : (
+                      <>Columnas esperadas: <code>AÑO, MES, DISTRITO, CANTIDAD, SEXO, CATEGORIA_OFI_SUB, CATEGORIA_ARM_SERV, FUNCION</code> (agrupación automática por distrito)</>
+                    )}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', borderTop: '1px solid var(--glass-border)', paddingTop: '1.5rem' }}>
+                  <button
+                    id="btn-clear-imported-data"
+                    className="btn btn-ghost"
+                    style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: '#ef4444' }}
+                    onClick={clearImportedData}
+                    disabled={clearing || etl.status === 'uploading'}
+                  >
+                    {clearing ? 'Eliminando...' : '🧹 Limpiar Historial Importado'}
+                  </button>
+                </div>
+
+                {etl.status !== 'idle' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {/* Progress */}
+                    {(etl.status === 'uploading' || etl.status === 'done') && (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: '0.875rem' }}>
+                          <span>{etl.fileName}</span>
+                          <span style={{ color: 'var(--brand-400)' }}>{etl.loaded}/{etl.total}</span>
+                        </div>
+                        <div style={{ background: 'var(--surface-2)', borderRadius: 999, height: 8, overflow: 'hidden' }}>
+                          <div style={{
+                            height: '100%',
+                            width: `${etl.total ? (etl.loaded / etl.total * 100) : 0}%`,
+                            background: 'linear-gradient(90deg, var(--brand-600), var(--brand-400))',
+                            transition: 'width 0.3s ease',
+                          }} />
+                        </div>
+                      </div>
+                    )}
+
+                    {etl.status === 'done' && (
+                      <div className="alert alert-success">
+                        ✅ Carga completada: <strong>{etl.loaded}</strong> registros importados
+                        {etl.errors.length > 0 && `, ${etl.errors.length} con errores`}.
+                      </div>
+                    )}
+                    {etl.status === 'error' && (
+                      <div className="alert alert-danger">❌ {etl.errors[0]}</div>
+                    )}
+                    {etl.errors.length > 0 && etl.status === 'done' && (
+                      <details>
+                        <summary style={{ cursor: 'pointer', fontSize: '0.875rem', color: 'var(--warning)' }}>
+                          {etl.errors.length} errores de validación
+                        </summary>
+                        <div style={{ maxHeight: 200, overflowY: 'auto', marginTop: 8 }}>
+                          {etl.errors.map((e, i) => <div key={i} style={{ fontSize: '0.8rem', color: 'var(--danger)' }}>{e}</div>)}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                )}
               </div>
-            ) : (
-              <>
-                {/* Desktop table */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-left text-sm">
+            )}
+
+            {/* Users Tab */}
+            {activeTab === 'users' && (
+              <div className="card animate-fade-in">
+                <h2 style={{ marginBottom: '1rem' }}>Gestión de Usuarios</h2>
+                <div className="table-wrapper">
+                  <table>
                     <thead>
-                      <tr className="border-b border-white/[0.05]">
-                        {["Usuario", "Reportes", "Verificados", "Falsas", "Trust"].map((h, i) => (
-                          <th key={h} className={`px-5 py-4 text-[10px] text-white/20 font-bold uppercase tracking-widest ${i > 0 ? "text-center" : ""} ${i === 4 ? "text-right" : ""}`}>{h}</th>
-                        ))}
+                      <tr>
+                        <th>Usuario</th>
+                        <th>Email</th>
+                        <th>Rol actual</th>
+                        <th>Trust Score</th>
+                        <th>Reportes</th>
+                        <th>Cambiar rol</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {users.map((u, i) => (
-                        <tr key={u.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors animate-fade-in-up" style={{ animationDelay: `${i * 60}ms` }}>
-                          <td className="px-5 py-3.5 text-[13px] text-white/60 font-medium">{u.displayName}</td>
-                          <td className="px-5 py-3.5 text-center text-white/50">{u.reportes_total}</td>
-                          <td className="px-5 py-3.5 text-center text-emerald-400/80 font-semibold">{u.reportes_verificados}</td>
-                          <td className="px-5 py-3.5 text-center text-red-400/70">{u.falsas_alarmas}</td>
-                          <td className="px-5 py-3.5 text-right"><TrustBadge score={u.trust_score} /></td>
+                      {users.map(u => (
+                        <tr key={u.uid}>
+                          <td>{u.displayName}</td>
+                          <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{u.email}</td>
+                          <td>
+                            <span className={`badge ${u.role === 'admin' ? 'badge-danger' : u.role === 'agente' ? 'badge-info' : 'badge-muted'}`}>
+                              {u.role}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`badge ${u.trustScore >= 75 ? 'badge-success' : u.trustScore >= 50 ? 'badge-warning' : 'badge-danger'}`}>
+                              {u.trustScore}
+                            </span>
+                          </td>
+                          <td>{u.totalReports}</td>
+                          <td>
+                            <select
+                              className="form-input"
+                              style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                              value={u.role}
+                              onChange={e => changeRole(u.uid, e.target.value as UserRole)}
+                            >
+                              <option value="ciudadano">ciudadano</option>
+                              <option value="agente">agente</option>
+                              <option value="admin">admin</option>
+                            </select>
+                          </td>
                         </tr>
                       ))}
+                      {users.length === 0 && (
+                        <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                          Cargando usuarios...
+                        </td></tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
-
-                {/* Mobile cards */}
-                <div className="md:hidden p-3 space-y-2">
-                  {users.map((u, i) => (
-                    <div key={u.id} className="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4 animate-fade-in-up" style={{ animationDelay: `${i * 60}ms` }}>
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-[13px] font-semibold text-white/65">{u.displayName}</span>
-                        <TrustBadge score={u.trust_score} />
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                        {[
-                          { n: u.reportes_total, l: "Reportes", c: "text-white/70" },
-                          { n: u.reportes_verificados, l: "Verificados", c: "text-emerald-400/80" },
-                          { n: u.falsas_alarmas, l: "Falsas", c: "text-red-400/70" },
-                        ].map(({ n, l, c }) => (
-                          <div key={l}>
-                            <p className={`text-xl font-bold ${c}`}>{n}</p>
-                            <p className="text-[9px] text-white/20 uppercase tracking-wider mt-0.5">{l}</p>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all duration-700 ${u.trust_score > 80 ? "bg-emerald-400" : u.trust_score > 30 ? "bg-amber-400" : "bg-red-400"}`}
-                          style={{ width: `${u.trust_score}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Ingesta ETL */}
-      {activeTab === "etl" && (
-        <div className="space-y-4 animate-fade-in">
-          <div className="metric-card">
-            <h2 className="text-[13px] font-bold text-white font-[family-name:var(--font-outfit)] mb-3">
-              Carga y Validación de Datasets (Datos Abiertos)
-            </h2>
-            <p className="text-xs text-white/50 mb-4 leading-relaxed">
-              Sube o pega un dataset en formato CSV o JSON correspondiente a denuncias de la PNP en Arequipa.
-              El sistema validará el esquema de datos (campos de latitud, longitud, tipo y descripción)
-              antes de importarlos a la base de datos de producción.
-            </p>
-
-            {/* Input area */}
-            <div className="space-y-4">
-              <textarea
-                value={etlInput}
-                onChange={(e) => setEtlInput(e.target.value)}
-                placeholder={`Pegue aquí el contenido CSV o JSON. Ejemplo CSV:
-tipo,latitude,longitude,descripcion
-robo_mano_armada,-16.4078,-71.5471,Robo frustrado cerca de la Universidad La Salle
-vandalismo,-16.3988,-71.5369,Pared pintarrajeada en el centro histórico`}
-                rows={8}
-                className="w-full bg-black/50 rounded-xl px-4 py-3 border border-white/[0.06] font-mono text-[11px] text-white/80 placeholder:text-white/20 resize-none focus:outline-none focus:border-white/15"
-              />
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={handleValidateETL}
-                  className="btn-secondary cursor-pointer"
-                >
-                  Validar Esquema
-                </button>
-                
-                <button
-                  onClick={handleLoadSampleData}
-                  className="btn-secondary !text-white/40 border-dashed cursor-pointer"
-                >
-                  Cargar Datos de Muestra
-                </button>
-
-                {etlStatus === "valid" && (
-                  <button
-                    onClick={handleImportETL}
-                    disabled={importing}
-                    className="btn-confirm !w-auto px-6 py-2 cursor-pointer"
-                  >
-                    {importing ? "Importando..." : "Importar a Firestore"}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* ETL feedback messages */}
-          {etlMessage && (
-            <div className={`p-4 rounded-xl text-xs border animate-scale-in ${
-              etlStatus === "valid" 
-                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                : etlStatus === "error"
-                ? "bg-red-500/10 border-red-500/20 text-red-400"
-                : "bg-white/5 border-white/10 text-white/60"
-            }`}>
-              {etlMessage}
-            </div>
-          )}
-
-          {/* Data preview table */}
-          {parsedRecords.length > 0 && (
-            <div className="metric-card !p-0 overflow-hidden animate-scale-in">
-              <div className="px-4 py-3 border-b border-white/[0.05]">
-                <span className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Vista previa de registros ({parsedRecords.length})</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-white/[0.05] bg-white/[0.01]">
-                      <th className="px-4 py-3 text-white/40 font-bold uppercase tracking-wider">Tipo</th>
-                      <th className="px-4 py-3 text-white/40 font-bold uppercase tracking-wider">Ubicación</th>
-                      <th className="px-4 py-3 text-white/40 font-bold uppercase tracking-wider">Descripción</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {parsedRecords.slice(0, 10).map((r, idx) => (
-                      <tr key={idx} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
-                        <td className="px-4 py-2 font-semibold text-white/70 capitalize">{r.tipo.replace(/_/g, " ")}</td>
-                        <td className="px-4 py-2 text-white/40 font-mono">{r.latitude.toFixed(4)}, {r.longitude.toFixed(4)}</td>
-                        <td className="px-4 py-2 text-white/50 max-w-[200px] truncate">{r.descripcion || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {parsedRecords.length > 10 && (
-                <div className="px-4 py-2 text-[10px] text-white/20 border-t border-white/[0.03]">
-                  Mostrando los primeros 10 registros...
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Simulador Live */}
-      {activeTab === "simulador" && (
-        <div className="space-y-4 animate-fade-in">
-          <div className="metric-card">
-            <h2 className="text-[13px] font-bold text-white font-[family-name:var(--font-outfit)] mb-3">
-              Simulador de Alertas en Tiempo Real (Arequipa)
-            </h2>
-            <p className="text-xs text-white/50 mb-4 leading-relaxed">
-              Genera incidentes en tiempo real localizados en puntos de interés y distritos clave de la provincia de Arequipa. 
-              Estas alertas son inyectadas en Firestore de forma automática, activando el pipeline de Inteligencia Artificial (Gemini) en la nube.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              <button onClick={() => triggerSimulation("robo_mano_armada")} disabled={simulating} className="btn-confirm !w-auto cursor-pointer">
-                Simular Robo Armado
-              </button>
-              <button onClick={() => triggerSimulation("accidente")} disabled={simulating} className="btn-resolve !w-auto cursor-pointer">
-                Simular Accidente Tránsito
-              </button>
-              <button onClick={() => triggerSimulation("vandalismo")} disabled={simulating} className="btn-secondary cursor-pointer">
-                Simular Vandalismo
-              </button>
-              <button onClick={() => triggerSimulation("sospechoso")} disabled={simulating} className="btn-secondary cursor-pointer">
-                Simular Sospechoso
-              </button>
-              <button onClick={() => triggerSimulation("choque")} disabled={simulating} className="btn-secondary cursor-pointer !text-orange-400 border-orange-500/20">
-                Simular Choque Vehicular
-              </button>
-              <button onClick={() => triggerSimulation("incendio")} disabled={simulating} className="btn-secondary cursor-pointer !text-red-400 border-red-500/20">
-                Simular Incendio
-              </button>
-              <button onClick={() => triggerSimulation("derrumbe")} disabled={simulating} className="btn-secondary cursor-pointer !text-yellow-400 border-yellow-500/20">
-                Simular Derrumbe
-              </button>
-              <button onClick={triggerBurstSimulation} disabled={simulating} className="col-span-full border border-dashed border-red-500/30 bg-red-500/5 hover:bg-red-500/10 text-red-400 font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.98]">
-                🔥 Simular Ráfaga de Alertas Múltiples (5 incidentes)
-              </button>
-            </div>
-            {simulationLog && (
-              <div className="mt-4 p-4 bg-black/60 border border-white/[0.04] rounded-xl font-mono text-[11px] text-emerald-400/90 whitespace-pre-line leading-relaxed">
-                {simulationLog}
               </div>
             )}
           </div>
         </div>
-      )}
-    </div>
+      </div>
+    </RoleGuard>
   );
 }

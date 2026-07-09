@@ -1,438 +1,760 @@
-"use client";
-
-import { useState, useEffect } from "react";
-import dynamic from "next/dynamic";
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import type { Incident } from "@/types";
-import ToastContainer, { showToast } from "@/components/Toast";
-import TimeAgo from "@/components/TimeAgo";
+'use client';
+// ============================================================
+// VIGÍA 54 — Dashboard Page (RF5)
+// Analytics dashboard for agents and admins
+// ============================================================
+import { useEffect, useState } from 'react';
 import {
-  AlertTriangle, MapPin, Shield, ImageOff,
-  CheckCircle, XCircle, Loader, ChevronLeft,
-} from "lucide-react";
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, LineChart, Line, Legend,
+} from 'recharts';
+import { RoleGuard }      from '@/components/layout/RoleGuard';
+import { Sidebar }        from '@/components/layout/Sidebar';
+import { subscribeToReports, updateReportStatus } from '@/lib/firestore';
+import { useAppStore }    from '@/store/useAppStore';
+import { BarChart3, FileText, Clock, CheckCircle2, Cpu, AlertTriangle } from 'lucide-react';
+import { haversineDistance } from '@/utils/geo';
 
-const AppMap = dynamic(() => import("@/components/Map"), { ssr: false });
+import type { Report }    from '@/types';
 
-const PRIORITY: Record<number, { label: string; dot: string; badge: string }> = {
-  1: { label: "CRÍTICA", dot: "bg-red-500",   badge: "bg-red-500/12 text-red-400 border-red-500/25" },
-  2: { label: "ALTA",    dot: "bg-amber-400", badge: "bg-amber-500/12 text-amber-400 border-amber-500/25" },
-  3: { label: "MEDIA",   dot: "bg-white/30",  badge: "bg-white/5 text-white/45 border-white/10" },
-};
-
-const STATUS_BADGE: Record<string, string> = {
-  verificado:   "bg-emerald-500/12 text-emerald-400",
-  falsa_alarma: "bg-red-500/12 text-red-400",
-  atendido:     "bg-blue-500/12 text-blue-400",
-  revision_ia:  "bg-white/5 text-white/30",
-};
-
-const getDistrictName = (inc: Incident): string => {
-  const desc = (inc.descripcion || "").toLowerCase();
-  if (desc.includes("cayma")) return "Cayma";
-  if (desc.includes("yanahuara")) return "Yanahuara";
-  if (desc.includes("paucarpata")) return "Paucarpata";
-  if (desc.includes("bustamante") || desc.includes("dolores")) return "J.L. Bustamante";
-  if (desc.includes("cercado") || desc.includes("puente bolognesi") || desc.includes("plaza de armas")) return "Cercado";
-  
-  const lat = inc.ubicacion.latitude;
-  const lng = inc.ubicacion.longitude;
-  if (lat > -16.39) return "Cayma";
-  if (lat < -16.41) {
-    if (lng < -71.52) return "J.L. Bustamante";
-    return "Paucarpata";
-  }
-  if (lng < -71.54) return "Yanahuara";
-  return "Cercado";
-};
+const COLORS = ['#ef4444','#f59e0b','#22c55e','#3b82f6','#8b5cf6','#ec4899','#64748b'];
 
 export default function DashboardPage() {
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [selected, setSelected] = useState<Incident | null>(null);
-  const [mobileTab, setMobileTab] = useState<"list" | "map" | "detail">("list");
-  const [validating, setValidating] = useState(false);
+  const [reports, setReports]   = useState<Report[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const { showNotification }    = useAppStore();
+  const [activeAlert, setActiveAlert] = useState<{
+    type: string;
+    district: string;
+    description: string;
+    timestamp: string;
+  } | null>(null);
+  const [selectedReportForAnalysis, setSelectedReportForAnalysis] = useState<Report | null>(null);
 
-  // Filters state
-  const [filterTipo, setFilterTipo] = useState<string>("todos");
-  const [filterEstado, setFilterEstado] = useState<string>("todos");
-  const [filterPrioridad, setFilterPrioridad] = useState<string>("todos");
-  const [showFilters, setShowFilters] = useState(false);
-  const [showStats, setShowStats] = useState(false);
+  function playSirenSound() {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      
+      const mod = ctx.createOscillator();
+      const modGain = ctx.createGain();
+      mod.frequency.value = 2.5;
+      modGain.gain.value = 160;
+      
+      mod.connect(modGain);
+      modGain.connect(osc.frequency);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      gain.gain.setValueAtTime(0.05, ctx.currentTime);
+      
+      mod.start();
+      osc.start();
+      
+      setTimeout(() => {
+        try {
+          osc.stop();
+          mod.stop();
+          ctx.close();
+        } catch (e) {}
+      }, 2500);
+    } catch (err) {
+      console.warn('Web Audio not supported', err);
+    }
+  }
 
   useEffect(() => {
-    const q = query(collection(db, "incidentes"), orderBy("prioridad", "asc"), orderBy("timestamp", "desc"));
-    return onSnapshot(q, (snap) => {
-      const items: Incident[] = snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id, tipo: data.tipo, estado: data.estado,
-          prioridad: data.prioridad || 3,
-          evidencia: data.evidencia || { fotoUrl: null, audioUrl: null },
-          ubicacion: data.ubicacion || { latitude: 0, longitude: 0, geohash: "" },
-          timestamp: data.timestamp?.toDate?.() || new Date(),
-          usuarioId: data.usuarioId || "unknown",
-          descripcion: data.descripcion,
-        } as Incident & { descripcion?: string };
-      });
-      setIncidents(items);
-      if (selected) {
-        const updated = items.find((i) => i.id === selected.id);
-        if (updated) setSelected(updated);
-      }
-    }, console.error);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    const unsub = subscribeToReports({}, (data) => {
+      setReports(data);
+      setLoading(false);
+    });
+    return unsub;
   }, []);
 
-  const validate = async (id: string, action: "Confirmado" | "Falsa Alarma" | "Resuelto") => {
-    setValidating(true);
-    try {
-      const estado = action === "Falsa Alarma" ? "falsa_alarma" : action === "Resuelto" ? "atendido" : "verificado";
-      await updateDoc(doc(db, "incidentes", id), {
-        estado, "metadata.validacion_autoridad": action, "metadata.fecha_validacion": serverTimestamp(),
-      });
-      showToast(`Marcado como: ${action}`, "success");
-    } catch { showToast("Error al validar", "error"); }
-    finally { setValidating(false); }
-  };
+  // ── Aggregate stats ───────────────────────────────────────
+  const total     = reports.length;
+  const pending   = reports.filter(r => r.status === 'pending').length;
+  const verified  = reports.filter(r => r.status === 'verified').length;
+  const falseAlarm= reports.filter(r => r.status === 'false_alarm').length;
 
-  const filteredIncidents = incidents.filter((inc) => {
-    if (filterTipo !== "todos" && inc.tipo !== filterTipo) return false;
-    if (filterEstado !== "todos" && inc.estado !== filterEstado) return false;
-    if (filterPrioridad !== "todos" && String(inc.prioridad) !== filterPrioridad) return false;
-    return true;
-  });
+  // By type
+  const byType = Object.entries(
+    reports.reduce((acc, r) => { acc[r.type] = (acc[r.type] ?? 0) + 1; return acc; }, {} as Record<string, number>)
+  ).map(([name, value]) => ({ name, value }));
 
-  const typeCounts = { 
-    robo_mano_armada: 0, 
-    accidente: 0, 
-    vandalismo: 0, 
-    sospechoso: 0,
-    choque: 0,
-    incendio: 0,
-    derrumbe: 0
-  };
-  const districtCounts: Record<string, number> = {};
+  // By district
+  const byDistrict = Object.entries(
+    reports.reduce((acc, r) => { acc[r.district] = (acc[r.district] ?? 0) + 1; return acc; }, {} as Record<string, number>)
+  ).sort((a, b) => b[1] - a[1]).slice(0, 8)
+   .map(([name, value]) => ({ name, value }));
 
-  filteredIncidents.forEach((inc) => {
-    if (inc.tipo in typeCounts) {
-      typeCounts[inc.tipo as keyof typeof typeCounts]++;
+  // By hour
+  const byHour = Array.from({ length: 24 }, (_, h) => ({
+    hora: `${h}:00`,
+    reportes: reports.filter(r => r.hour === h).length,
+  }));
+
+  // AI accuracy
+  const aiReports = reports.filter(r => r.aiScore !== undefined && r.aiScore !== null);
+  const avgAiScore = aiReports.length
+    ? (aiReports.reduce((s, r) => s + (r.aiScore ?? 0), 0) / aiReports.length * 100).toFixed(1)
+    : '—';
+
+  // Status update
+  async function handleStatusChange(id: string, status: Report['status']) {
+    await updateReportStatus(id, status);
+    
+    if (status === 'false_alarm') {
+      showNotification('error', `Reporte catalogado como Falsa Alarma - Descartando`);
+    } else if (status === 'verified') {
+      const report = reports.find(r => r.id === id);
+      if (report) {
+        setActiveAlert({
+          type: report.type,
+          district: report.district,
+          description: report.description,
+          timestamp: new Date(report.timestamp).toLocaleString('es-PE'),
+        });
+        playSirenSound();
+      }
+      showNotification('success', `Reporte verificado. Alerta enviada a Serenazgo.`);
+    } else if (status === 'resolved') {
+      showNotification('success', `Incidencia resuelta. El mapa ahora marcará esta zona en verde.`);
+    } else {
+      showNotification('success', `Reporte actualizado a: ${status}`);
     }
-    const dist = getDistrictName(inc);
-    districtCounts[dist] = (districtCounts[dist] || 0) + 1;
-  });
-
-  const TABS = [
-    { key: "list"   as const, label: "Tickets", Icon: AlertTriangle },
-    { key: "map"    as const, label: "Mapa",    Icon: MapPin },
-    { key: "detail" as const, label: "Detalle", Icon: Shield },
-  ];
+  }
 
   return (
-    <div className="flex w-full h-full">
-      <ToastContainer />
-
-      {/* ── Sidebar izquierda: lista ── */}
-      <aside className={`w-full md:w-[300px] bg-[#0a0a0d] border-r border-white/[0.05] flex flex-col h-full shrink-0 ${mobileTab !== "list" ? "hidden md:flex" : "flex"}`}>
-        {/* Header sidebar */}
-        <div className="px-4 py-3.5 border-b border-white/[0.05]">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Cola en vivo</span>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-white/20 bg-white/5 border border-white/7 px-2.5 py-0.5 rounded-full">
-                {filteredIncidents.length}
-              </span>
-              <button
-                onClick={() => { setShowFilters(!showFilters); setShowStats(false); }}
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-colors cursor-pointer ${
-                  showFilters
-                    ? "bg-white text-black border-white"
-                    : "bg-white/5 text-white/50 border-white/10 hover:text-white"
-                }`}
-              >
-                Filtros
-              </button>
-              <button
-                onClick={() => { setShowStats(!showStats); setShowFilters(false); }}
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-colors cursor-pointer ${
-                  showStats
-                    ? "bg-emerald-500 text-white border-emerald-500"
-                    : "bg-white/5 text-white/50 border-white/10 hover:text-white"
-                }`}
-              >
-                Estadísticas
-              </button>
+    <RoleGuard allowedRoles={['agente','admin']}>
+      <div className="page-wrapper">
+        <Sidebar />
+        <div className="main-content">
+          <header className="topbar">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BarChart3 size={20} strokeWidth={2} style={{ color: '#60a5fa' }} />
+              <span className="topbar-title">Dashboard Analítico</span>
             </div>
-          </div>
+            <span className="badge badge-info">{total} reportes totales</span>
+          </header>
 
-          {showFilters && (
-            <div className="mt-3 space-y-2 animate-scale-in">
-              <select
-                value={filterTipo}
-                onChange={(e) => setFilterTipo(e.target.value)}
-                className="w-full bg-[#111116] border border-white/[0.08] rounded-lg p-2 text-xs text-white/70 focus:outline-none"
-              >
-                <option value="todos">Todos los reportes</option>
-                <option value="robo_mano_armada">Robo Armado</option>
-                <option value="vandalismo">Vandalismo</option>
-                <option value="sospechoso">Sospechoso</option>
-                <option value="accidente">Accidente</option>
-                <option value="choque">Choque Vehicular</option>
-                <option value="incendio">Incendio</option>
-                <option value="derrumbe">Derrumbe</option>
-              </select>
-              <select
-                value={filterEstado}
-                onChange={(e) => setFilterEstado(e.target.value)}
-                className="w-full bg-[#111116] border border-white/[0.08] rounded-lg p-2 text-xs text-white/70 focus:outline-none"
-              >
-                <option value="todos">Todos los estados</option>
-                <option value="revision_ia">Revisión IA</option>
-                <option value="verificado">Verificado</option>
-                <option value="atendido">Resuelto</option>
-                <option value="falsa_alarma">Falsa Alarma</option>
-              </select>
-              <select
-                value={filterPrioridad}
-                onChange={(e) => setFilterPrioridad(e.target.value)}
-                className="w-full bg-[#111116] border border-white/[0.08] rounded-lg p-2 text-xs text-white/70 focus:outline-none"
-              >
-                <option value="todos">Todas las prioridades</option>
-                <option value="1">Prioridad Crítica</option>
-                <option value="2">Prioridad Alta</option>
-                <option value="3">Prioridad Media</option>
-              </select>
-            </div>
-          )}
-        </div>
-
-        {/* List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-          {showStats ? (
-            <div className="space-y-5 p-1 animate-fade-in">
-              <div>
-                <h3 className="text-[11px] font-bold text-white/35 uppercase tracking-widest mb-3">Distribución de Delitos</h3>
-                <div className="space-y-3 bg-[#111116] border border-white/[0.04] p-3.5 rounded-xl">
-                  {Object.entries(typeCounts).map(([tipo, count]) => {
-                    const pct = filteredIncidents.length > 0 ? (count / filteredIncidents.length) * 100 : 0;
-                    const labels: Record<string, string> = {
-                      robo_mano_armada: "Robo Armado",
-                      accidente: "Accidentes",
-                      vandalismo: "Vandalismo",
-                      sospechoso: "Sospechoso",
-                      choque: "Choques",
-                      incendio: "Incendios",
-                      derrumbe: "Derrumbes",
-                    };
-                    const barColors: Record<string, string> = {
-                      robo_mano_armada: "bg-red-500",
-                      accidente: "bg-blue-400",
-                      vandalismo: "bg-amber-400",
-                      sospechoso: "bg-zinc-400",
-                      choque: "bg-orange-500",
-                      incendio: "bg-red-600",
-                      derrumbe: "bg-yellow-600",
-                    };
-                    return (
-                      <div key={tipo} className="space-y-1">
-                        <div className="flex justify-between text-[11px]">
-                          <span className="text-white/60 font-medium">{labels[tipo]}</span>
-                          <span className="text-white/45 font-bold">{count} ({pct.toFixed(0)}%)</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${barColors[tipo]}`} style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+          <div className="page-inner">
+            {/* Stats */}
+            <div className="stats-grid animate-fade-in">
+              <div className="stat-card">
+                <div className="stat-icon stat-icon-blue"><FileText size={20} /></div>
+                <div className="stat-value">{total}</div>
+                <div className="stat-label">Total Reportes</div>
               </div>
-
-              <div>
-                <h3 className="text-[11px] font-bold text-white/35 uppercase tracking-widest mb-3">Ranking de Distritos</h3>
-                <div className="space-y-3 bg-[#111116] border border-white/[0.04] p-3.5 rounded-xl">
-                  {Object.entries(districtCounts).length === 0 ? (
-                    <p className="text-[10px] text-white/20 text-center py-2">Sin datos de distritos</p>
-                  ) : (
-                    Object.entries(districtCounts)
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([dist, count]) => {
-                        const maxVal = Math.max(...Object.values(districtCounts), 1);
-                        const pct = (count / maxVal) * 100;
-                        return (
-                          <div key={dist} className="space-y-1">
-                            <div className="flex justify-between text-[11px]">
-                              <span className="text-white/70 font-semibold">{dist}</span>
-                              <span className="text-white/45 font-bold">{count} ({((count / filteredIncidents.length) * 100).toFixed(0)}%)</span>
-                            </div>
-                            <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                              <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${pct}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })
-                  )}
-                </div>
+              <div className="stat-card">
+                <div className="stat-icon stat-icon-yellow"><Clock size={20} /></div>
+                <div className="stat-value">{pending}</div>
+                <div className="stat-label">Pendientes</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-icon stat-icon-green"><CheckCircle2 size={20} /></div>
+                <div className="stat-value">{verified}</div>
+                <div className="stat-label">Verificados</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-icon stat-icon-red"><Cpu size={20} /></div>
+                <div className="stat-value">{avgAiScore}%</div>
+                <div className="stat-label">Confianza IA Promedio</div>
               </div>
             </div>
-          ) : filteredIncidents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center gap-3 p-6">
-              <Shield size={32} strokeWidth={1} className="opacity-20 text-white" />
-              <p className="text-sm text-white/25">Sin incidentes activos</p>
-              <p className="text-[10px] text-white/15">Los reportes aparecerán aquí en tiempo real</p>
-            </div>
-          ) : filteredIncidents.map((inc, i) => {
-            const p = PRIORITY[inc.prioridad] || PRIORITY[3];
-            const isActive = selected?.id === inc.id;
-            return (
-              <button
-                key={inc.id}
-                onClick={() => { setSelected(inc); setMobileTab("detail"); }}
-                className={`incident-card ${isActive ? "active" : ""} animate-fade-in-up`}
-                style={{ animationDelay: `${i * 40}ms` }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${p.badge}`}>
-                    {p.label}
-                  </span>
-                  <span className="text-[10px] text-white/25"><TimeAgo date={inc.timestamp} /></span>
-                </div>
-                <p className="text-[13px] text-white/85 font-semibold capitalize leading-tight">
-                  {inc.tipo.replace(/_/g, " ")}
-                </p>
-                <div className="flex items-center justify-between mt-2.5">
-                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${STATUS_BADGE[inc.estado] || "bg-white/5 text-white/30"}`}>
-                    {inc.estado.replace(/_/g, " ")}
-                  </span>
-                  <span className="text-white/20 text-xs">›</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </aside>
 
-      {/* ── Centro: mapa ── */}
-      <section className={`flex-1 relative bg-black ${mobileTab !== "map" ? "hidden md:block" : "block"}`}>
-        <AppMap
-          selectedId={selected?.id}
-          onSelectIncident={(inc) => {
-            setSelected(inc);
-            setMobileTab("detail");
-          }}
-          overlayClassName="top-3 left-3 right-3 md:left-4 md:right-auto md:w-80 z-10"
-          incidents={filteredIncidents}
-        />
-      </section>
-
-      {/* ── Sidebar derecha: detalle ── */}
-      <aside className={`w-full md:w-[300px] bg-[#0a0a0d] border-l border-white/[0.05] flex flex-col h-full shrink-0 ${mobileTab !== "detail" ? "hidden md:flex" : "flex"}`}>
-        {selected ? (
-          <>
-            {/* Header */}
-            <div className="px-4 py-3.5 border-b border-white/[0.05] flex items-center justify-between">
-              <div>
-                <h2 className="text-[13px] font-bold text-white font-[family-name:var(--font-outfit)]">Detalle</h2>
-                <p className="text-[9px] text-white/20 font-mono mt-0.5 truncate max-w-[160px]">{selected.id}</p>
+            {/* Charts row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+              {/* By type pie */}
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="card-title">Incidencias por Tipo</h3>
+                </div>
+                <ResponsiveContainer width="100%" height={240}>
+                  <PieChart>
+                    <Pie data={byType} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>
+                      {byType.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: 'var(--surface-2)', border: 'none', borderRadius: 8 }} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-              <button className="md:hidden text-[11px] text-white/35 hover:text-white/60 transition-colors flex items-center gap-1" onClick={() => setMobileTab("list")}>
-                <ChevronLeft size={13} strokeWidth={2} /> Lista
-              </button>
+
+              {/* By district bar */}
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="card-title">Top Distritos</h3>
+                </div>
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={byDistrict} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 12 }} />
+                    <YAxis type="category" dataKey="name" width={90} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                    <Tooltip contentStyle={{ background: 'var(--surface-2)', border: 'none', borderRadius: 8 }} />
+                    <Bar dataKey="value" fill="#3b82f6" radius={[0,4,4,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-5">
-
-              {/* Tipo */}
-              <div>
-                <p className="section-label mb-1.5">Clasificación</p>
-                <p className="text-sm text-white/80 font-semibold capitalize">{selected.tipo.replace(/_/g, " ")}</p>
+            {/* By hour line chart */}
+            <div className="card" style={{ marginBottom: '1.5rem' }}>
+              <div className="card-header">
+                <h3 className="card-title">Distribución Horaria de Incidencias</h3>
               </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={byHour}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="hora" tick={{ fill: '#94a3b8', fontSize: 11 }} interval={2} />
+                  <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} />
+                  <Tooltip contentStyle={{ background: 'var(--surface-2)', border: 'none', borderRadius: 8 }} />
+                  <Line type="monotone" dataKey="reportes" stroke="#60a5fa" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
 
-              {/* Descripción */}
-              {(selected as Incident & { descripcion?: string }).descripcion && (
-                <div>
-                  <p className="section-label mb-1.5">Descripción</p>
-                  <p className="text-[13px] text-white/60 bg-white/[0.03] border border-white/[0.05] rounded-xl p-3 leading-relaxed">
-                    {(selected as Incident & { descripcion?: string }).descripcion}
-                  </p>
-                </div>
-              )}
-
-              {/* IA score */}
-              <div>
-                <p className="section-label mb-2">Confianza IA</p>
-                <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-                  <div className="h-full bg-white rounded-full transition-all duration-700"
-                    style={{ width: `${(selected.evidencia?.ia_score || 0) * 100}%` }} />
-                </div>
-                <p className="text-[10px] text-white/25 mt-1.5">{((selected.evidencia?.ia_score || 0) * 100).toFixed(0)}% certeza</p>
+            {/* Pending reports table */}
+            <div className="card">
+              <div className="card-header">
+                <h3 className="card-title">Reportes Pendientes de Revisión</h3>
+                <span className="badge badge-warning">{pending} pendientes</span>
               </div>
-
-              {/* Evidencia */}
-              {selected.evidencia.fotoUrl ? (
-                <div className="rounded-xl overflow-hidden border border-white/[0.06]">
-                  <img src={selected.evidencia.fotoUrl} alt="Evidencia" className="w-full h-40 object-cover" />
+              {loading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 50 }} />)}
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-white/20 text-xs">
-                  <ImageOff size={14} strokeWidth={1.5} />
-                  <span>Sin evidencia adjunta</span>
+                <div className="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Tipo</th>
+                        <th>Distrito</th>
+                        <th>Descripción</th>
+                        <th>Fecha</th>
+                        <th>IA Score</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reports.filter(r => r.status === 'pending').slice(0, 20).map(r => (
+                        <tr key={r.id}>
+                          <td><span style={{ textTransform: 'capitalize' }}>{r.type}</span></td>
+                          <td>{r.district}</td>
+                          <td style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {r.description}
+                          </td>
+                          <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            {new Date(r.timestamp).toLocaleDateString('es-PE')}
+                          </td>
+                          <td>
+                            {r.aiScore !== undefined && r.aiScore !== null
+                              ? <span className={`badge ${r.aiScore > 0.7 ? 'badge-success' : r.aiScore > 0.4 ? 'badge-warning' : 'badge-danger'}`}>
+                                  {Math.round(r.aiScore * 100)}%
+                                </span>
+                              : <span className="badge badge-muted">—</span>
+                            }
+                          </td>
+                          <td>
+                             <div style={{ display: 'flex', gap: 6 }}>
+                               <button
+                                 className="btn btn-sm"
+                                 style={{
+                                   background: '#22c55e',
+                                   color: '#ffffff',
+                                   border: 'none',
+                                   fontWeight: 600,
+                                   padding: '4px 10px',
+                                 }}
+                                 onClick={() => {
+                                   handleStatusChange(r.id, 'verified');
+                                   showNotification('success', '¡Reporte verificado! Alerta despachada de inmediato al Serenazgo de la zona.');
+                                 }}
+                                 title="Verificar y despachar al Serenazgo"
+                               >
+                                 Verificar
+                               </button>
+                               <button
+                                 className="btn btn-sm"
+                                 style={{
+                                   background: 'rgba(239,68,68,0.15)',
+                                   color: '#ef4444',
+                                   border: '1px solid rgba(239,68,68,0.3)',
+                                   fontWeight: 600,
+                                   padding: '4px 10px',
+                                 }}
+                                 onClick={() => {
+                                   handleStatusChange(r.id, 'false_alarm');
+                                   showNotification('info', 'Reporte descartado como No Verificado.');
+                                 }}
+                                 title="Descartar reporte"
+                               >
+                                 No Verificado
+                               </button>
+                               <button
+                                 className="btn btn-sm"
+                                 style={{ background: 'rgba(59,130,246,0.15)', color: 'var(--info)', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                 onClick={() => setSelectedReportForAnalysis(r)}
+                                 title="Analizar Contexto de IA y Proximidad"
+                               >
+                                 <span>🤖</span>
+                                 <span>Analizar IA</span>
+                               </button>
+                             </div>
+                           </td>
+                        </tr>
+                      ))}
+                      {reports.filter(r => r.status === 'pending').length === 0 && (
+                        <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                          ✅ No hay reportes pendientes
+                        </td></tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               )}
+            </div>
 
-              {/* Ubicación */}
-              <div>
-                <p className="section-label mb-1.5">Ubicación GPS</p>
-                <p className="text-xs text-white/45 font-mono">
-                  {selected.ubicacion.latitude.toFixed(5)}, {selected.ubicacion.longitude.toFixed(5)}
-                </p>
+            {/* Verified reports card */}
+            <div className="card" style={{ marginTop: '1.5rem' }}>
+              <div className="card-header" style={{ borderLeft: '4px solid var(--success)' }}>
+                <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <CheckCircle2 size={18} style={{ color: '#22c55e' }} />
+                  Reportes Verificados (En proceso de atención)
+                </h3>
+                <span className="badge badge-success">{reports.filter(r => r.status === 'verified').length} en proceso</span>
+              </div>
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Tipo</th>
+                      <th>Distrito</th>
+                      <th>Descripción</th>
+                      <th>Fecha</th>
+                      <th>Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reports.filter(r => r.status === 'verified').slice(0, 20).map(r => (
+                      <tr key={r.id}>
+                        <td><span style={{ textTransform: 'capitalize' }}>{r.type}</span></td>
+                        <td>{r.district}</td>
+                        <td style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {r.description}
+                        </td>
+                        <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                          {new Date(r.timestamp).toLocaleDateString('es-PE')}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button
+                              className="btn btn-sm"
+                              style={{
+                                background: '#10b981',
+                                color: '#ffffff',
+                                border: 'none',
+                                fontWeight: 600,
+                                padding: '4px 10px',
+                              }}
+                              onClick={() => handleStatusChange(r.id, 'resolved')}
+                              title="Marcar incidencia como resuelta"
+                            >
+                              Resolver
+                            </button>
+                            <button
+                              className="btn btn-sm"
+                              style={{ background: 'rgba(59,130,246,0.15)', color: 'var(--info)', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', gap: '4px' }}
+                              onClick={() => setSelectedReportForAnalysis(r)}
+                              title="Analizar Contexto de IA y Proximidad"
+                            >
+                              <span>🤖</span>
+                              <span>Analizar IA</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {reports.filter(r => r.status === 'verified').length === 0 && (
+                      <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                        No hay reportes verificados activos.
+                      </td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      {/* Dispatch Simulation Alert Modal */}
+      {activeAlert && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.85)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #1e1b4b 0%, #0f0728 100%)',
+            border: '2px solid #ef4444',
+            borderRadius: '16px',
+            padding: '2.5rem',
+            maxWidth: '500px',
+            width: '90%',
+            textAlign: 'center',
+            boxShadow: '0 0 50px rgba(239, 68, 68, 0.4)',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            <style dangerouslySetInnerHTML={{__html: `
+              @keyframes sirenBar {
+                0% { background-position: 0% 50%; }
+                50% { background-position: 100% 50%; }
+                100% { background-position: 0% 50%; }
+              }
+              @keyframes pulseSiren {
+                0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+                100% { transform: scale(1.1); box-shadow: 0 0 20px 10px rgba(239, 68, 68, 0); }
+              }
+            `}} />
+            
+            {/* Sirena visual pulsing effect */}
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '6px',
+              background: 'linear-gradient(90deg, #ef4444 0%, #3b82f6 50%, #ef4444 100%)',
+              backgroundSize: '200% 100%',
+              animation: 'sirenBar 2s linear infinite'
+            }} />
+
+            <div style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(239,68,68,0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.5rem',
+              border: '3px solid #ef4444',
+              animation: 'pulseSiren 1s infinite alternate'
+            }}>
+              <AlertTriangle size={40} color="#ef4444" />
+            </div>
+
+            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#fff', marginBottom: '0.5rem', letterSpacing: '1px' }}>
+              ¡DESPACHO DE EMERGENCIA!
+            </h2>
+            <p style={{ color: '#f87171', fontWeight: 600, fontSize: '0.95rem', marginBottom: '1.5rem' }}>
+              Alerta enviada en tiempo real a Serenazgo
+            </p>
+
+            <div style={{
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '12px',
+              padding: '1.25rem',
+              textAlign: 'left',
+              marginBottom: '2rem'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.8rem', color: '#94a3b8' }}>
+                <span>TIPO:</span>
+                <span style={{ color: '#ef4444', fontWeight: 700, textTransform: 'uppercase' }}>{activeAlert.type}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.8rem', color: '#94a3b8' }}>
+                <span>DISTRITO:</span>
+                <span style={{ color: '#fff', fontWeight: 600 }}>{activeAlert.district}</span>
+              </div>
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
+                <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>DESCRIPCIÓN:</span>
+                <p style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0, lineHeight: 1.4 }}>{activeAlert.description}</p>
+              </div>
+            </div>
+
+            <button
+              className="btn"
+              style={{
+                background: 'linear-gradient(90deg, #ef4444 0%, #b91c1c 100%)',
+                color: '#fff',
+                width: '100%',
+                padding: '0.75rem',
+                fontSize: '1rem',
+                fontWeight: 700,
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(239,68,68,0.2)'
+              }}
+              onClick={() => setActiveAlert(null)}
+            >
+              Entendido / Confirmar Despacho
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* AI Inspector & Geographic Correlation Modal */}
+      {selectedReportForAnalysis && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15,23,42,0.85)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div style={{
+            background: 'var(--surface-1)',
+            border: '1px solid var(--glass-border)',
+            borderRadius: '16px',
+            padding: '2rem',
+            maxWidth: '650px',
+            width: '92%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: 'var(--shadow-lg)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.5rem'
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Cpu size={24} style={{ color: 'var(--brand-400)' }} />
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Inspector de Inteligencia Artificial</h3>
+              </div>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ minWidth: '32px', height: '32px', borderRadius: '50%', padding: 0 }}
+                onClick={() => setSelectedReportForAnalysis(null)}
+              >✕</button>
+            </div>
+
+            {/* Report summary card */}
+            <div style={{
+              background: 'var(--surface-2)',
+              borderRadius: '10px',
+              padding: '1rem',
+              border: '1px solid rgba(255,255,255,0.05)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span style={{ textTransform: 'capitalize', fontWeight: 700, color: 'var(--brand-300)' }}>
+                  {selectedReportForAnalysis.type}
+                </span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  📍 {selectedReportForAnalysis.district}
+                </span>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                {selectedReportForAnalysis.description}
+              </p>
+              <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Reportado el: {new Date(selectedReportForAnalysis.timestamp).toLocaleString('es-PE')}
+              </div>
+            </div>
+
+            {/* AI Triage Section */}
+            <div>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-muted)' }}>
+                CONTEXTO DE TRIAJE GENERADO POR IA
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                {/* Score */}
+                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Confianza de IA:</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      fontSize: '1.25rem',
+                      fontWeight: 700,
+                      color: (selectedReportForAnalysis.aiScore ?? 0.5) > 0.7
+                        ? 'var(--success)'
+                        : (selectedReportForAnalysis.aiScore ?? 0.5) > 0.4
+                        ? 'var(--warning)'
+                        : 'var(--danger)'
+                    }}>
+                      {Math.round((selectedReportForAnalysis.aiScore ?? 0.5) * 100)}%
+                    </span>
+                    <div style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${(selectedReportForAnalysis.aiScore ?? 0.5) * 100}%`,
+                        background: (selectedReportForAnalysis.aiScore ?? 0.5) > 0.7
+                          ? 'var(--success)'
+                          : (selectedReportForAnalysis.aiScore ?? 0.5) > 0.4
+                          ? 'var(--warning)'
+                          : 'var(--danger)'
+                      }} />
+                    </div>
+                  </div>
+                </div>
+                {/* Priority */}
+                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Prioridad Asignada:</div>
+                  <span className={`badge ${
+                    selectedReportForAnalysis.priority === 'critical' || selectedReportForAnalysis.priority === 'high'
+                      ? 'badge-danger'
+                      : selectedReportForAnalysis.priority === 'medium'
+                      ? 'badge-warning'
+                      : 'badge-info'
+                  }`} style={{ textTransform: 'uppercase', padding: '4px 8px', fontSize: '0.8rem', fontWeight: 700 }}>
+                    {selectedReportForAnalysis.priority ?? 'medium'}
+                  </span>
+                </div>
               </div>
 
-              {/* Acciones */}
-              <div className="pt-1">
-                <p className="section-label mb-3">Verificación en Campo</p>
-                <div className="flex flex-col gap-2">
-                  <button onClick={() => validate(selected.id!, "Confirmado")} disabled={validating} className="btn-confirm">
-                    {validating
-                      ? <Loader size={13} strokeWidth={2} className="animate-spin" />
-                      : <AlertTriangle size={13} strokeWidth={2} />
-                    }
-                    Confirmado (Real)
-                  </button>
-                  <button onClick={() => validate(selected.id!, "Resuelto")} disabled={validating} className="btn-resolve">
-                    <CheckCircle size={13} strokeWidth={2} /> Resuelto
-                  </button>
-                  <button onClick={() => validate(selected.id!, "Falsa Alarma")} disabled={validating} className="btn-false">
-                    <XCircle size={13} strokeWidth={2} /> Falsa Alarma
-                  </button>
-                </div>
-                <p className="text-[10px] text-white/15 mt-3 text-center leading-relaxed">
-                  Esta acción actualiza el Trust Score del ciudadano
+              <div style={{
+                background: 'rgba(96,165,250,0.05)',
+                border: '1px solid rgba(96,165,250,0.15)',
+                borderRadius: '10px',
+                padding: '1rem'
+              }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--brand-300)', display: 'block', marginBottom: '0.25rem' }}>
+                  🤖 RESUMEN ANALÍTICO DE GEMINI:
+                </span>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-primary)', lineHeight: 1.4, fontStyle: 'italic' }}>
+                  {selectedReportForAnalysis.aiAnalysis || 'Análisis de triaje contextual no disponible para este reporte.'}
                 </p>
               </div>
             </div>
-          </>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-3">
-            <Shield size={40} strokeWidth={1} className="opacity-20 text-white" />
-            <p className="text-sm text-white/25">Selecciona un incidente</p>
-            <p className="text-[10px] text-white/15">Los detalles aparecerán aquí</p>
-          </div>
-        )}
-      </aside>
 
-      {/* ── Mobile tab bar ── */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 tab-bar">
-        <div className="flex">
-          {TABS.map((tab) => (
-            <button key={tab.key} onClick={() => setMobileTab(tab.key)}
-              className={`tab-bar-btn ${mobileTab === tab.key ? "active" : ""}`}>
-              <tab.Icon size={16} strokeWidth={1.5} className="tab-icon" />
-              <span>{tab.label}</span>
+            {/* Geographic Correlation */}
+            <div>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-muted)' }}>
+                CORRELACIÓN GEOGRÁFICA Y PROXIMIDAD (RADIO 1.5 KM)
+              </h4>
+
+              {/* Calculations block */}
+              {(() => {
+                const nearby = reports.filter(r => {
+                  if (r.id === selectedReportForAnalysis.id) return false;
+                  if (r.status === 'false_alarm') return false;
+                  const dist = haversineDistance(
+                    { lat: selectedReportForAnalysis.location.lat, lng: selectedReportForAnalysis.location.lng },
+                    { lat: r.location.lat, lng: r.location.lng }
+                  );
+                  return dist <= 1.5;
+                }).map(r => {
+                  const dist = haversineDistance(
+                    { lat: selectedReportForAnalysis.location.lat, lng: selectedReportForAnalysis.location.lng },
+                    { lat: r.location.lat, lng: r.location.lng }
+                  );
+                  return { ...r, distance: dist };
+                }).sort((a, b) => a.distance - b.distance);
+
+                let dangerText = 'Estable — Sin incidencias cercanas';
+                let dangerColor = 'var(--success)';
+                let dangerBg = 'rgba(34,197,94,0.1)';
+                let dangerBorder = 'rgba(34,197,94,0.3)';
+
+                if (nearby.length >= 3) {
+                  dangerText = '🚨 Peligro Extremo — Clúster Activo Detectado';
+                  dangerColor = 'var(--danger)';
+                  dangerBg = 'rgba(239,68,68,0.1)';
+                  dangerBorder = 'rgba(239,68,68,0.4)';
+                } else if (nearby.length > 0) {
+                  dangerText = '⚠️ Precaución — Incidentes Cercanos';
+                  dangerColor = 'var(--warning)';
+                  dangerBg = 'rgba(245,158,11,0.1)';
+                  dangerBorder = 'rgba(245,158,11,0.3)';
+                }
+
+                return (
+                  <>
+                    {/* Hazard Level Badge */}
+                    <div style={{
+                      background: dangerBg,
+                      border: `1px solid ${dangerBorder}`,
+                      color: dangerColor,
+                      borderRadius: '8px',
+                      padding: '0.75rem 1rem',
+                      fontSize: '0.9rem',
+                      fontWeight: 700,
+                      marginBottom: '1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <AlertTriangle size={18} />
+                      <span>{dangerText} ({nearby.length} {nearby.length === 1 ? 'incidente correlacionado' : 'incidentes correlacionados'})</span>
+                    </div>
+
+                    {/* Correlated list */}
+                    <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {nearby.length === 0 ? (
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1rem 0' }}>
+                          No se encontraron reportes o alarmas activos en un radio de 1.5 km.
+                        </div>
+                      ) : (
+                        nearby.map(n => (
+                          <div key={n.id} style={{
+                            background: 'rgba(255,255,255,0.02)',
+                            border: '1px solid rgba(255,255,255,0.06)',
+                            borderRadius: '8px',
+                            padding: '0.6rem 0.8rem',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            fontSize: '0.8rem'
+                          }}>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ textTransform: 'capitalize', fontWeight: 700, color: 'var(--brand-300)' }}>{n.type}</span>
+                                <span className={`badge ${n.status === 'verified' ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '0.65rem', padding: '2px 4px' }}>
+                                  {n.status === 'verified' ? 'Verificado' : 'Pendiente'}
+                                </span>
+                              </div>
+                              <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)', maxWidth: '350px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {n.description}
+                              </p>
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              <div style={{ color: 'var(--brand-400)', fontWeight: 700 }}>{(n.distance * 1000).toFixed(0)}m</div>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{n.district}</div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Close Button */}
+            <button
+              className="btn"
+              style={{ background: 'var(--surface-3)', border: '1px solid var(--glass-border)', color: '#fff', padding: '0.75rem', fontWeight: 700, borderRadius: '8px', cursor: 'pointer' }}
+              onClick={() => setSelectedReportForAnalysis(null)}
+            >
+              Cerrar Panel Inspector
             </button>
-          ))}
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </RoleGuard>
   );
 }

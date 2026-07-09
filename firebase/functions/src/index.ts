@@ -1,129 +1,159 @@
-import * as functions from "firebase-functions";
-import * as admin from "firebase-admin";
-// import { ImageAnnotatorClient } from "@google-cloud/vision"; // Requires billing
-import { GoogleGenerativeAI } from "@google/generative-ai";
+// ============================================================
+// VIGÍA 54 — Cloud Functions (RF1 + RF3 + RF5)
+// Serverless backend on Firebase
+// ============================================================
+import * as functions from 'firebase-functions/v2';
+import * as admin     from 'firebase-admin';
 
 admin.initializeApp();
 const db = admin.firestore();
 
-// Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+// ── RF1: Triaje IA con Gemini ─────────────────────────────
+// Triggered when a new report is created in Firestore
+export const triageReport = functions.firestore.onDocumentCreated(
+  'reports/{reportId}',
+  async (event) => {
+    const data = event.data?.data();
+    if (!data || data.source === 'etl_import') return; // skip ETL data
+    if (data.status !== 'pending') return;
 
-export const revision_ia = functions.firestore
-  .document("incidentes/{incidenteId}")
-  .onCreate(async (snap, context) => {
-    const incidente = snap.data();
-    const { incidenteId } = context.params;
+    const reportId = event.params.reportId;
 
-    functions.logger.info(`Iniciando revisión IA para incidente: ${incidenteId}`);
+    if (data.isSos === true) {
+      try {
+        await db.doc(`reports/${reportId}`).update({
+          status:     'verified',
+          priority:   'critical',
+          aiScore:    1.0,
+          aiAnalysis: 'Reporte verificado automáticamente vía botón de pánico SOS.',
+        });
+        functions.logger.info(`[RF1] SOS Auto-verificación OK: ${reportId}`);
+      } catch (err) {
+        functions.logger.error('[RF1] SOS Auto-verificación error:', err);
+      }
+      return;
+    }
 
-    let iaScore = 0.5; // Base score
-    let estado = "verificado";
-    let prioridad = incidente.prioridad || 3;
+    const apiKey   = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      functions.logger.warn('GEMINI_API_KEY not set. Skipping triage.');
+      return;
+    }
+
+    // Fetch local police allocation context
+    let policeContext = '';
+    try {
+      const districtUpper = (data.district || '').toUpperCase();
+      const policeSnap = await db.doc(`police_allocation/${districtUpper}`).get();
+      if (policeSnap.exists) {
+        const p = policeSnap.data()!;
+        policeContext = `Contexto del Despliegue de Fuerza Policial PNP en el distrito de ${data.district}:
+- Efectivos Totales Asignados: ${p.total || 0}
+- Oficiales: ${p.oficial || 0}, Suboficiales: ${p.suboficial || 0}
+- Personal de Armas: ${p.armas || 0}, Personal de Servicios: ${p.servicios || 0}
+- Efectivos en Funciones Operativas: ${p.operativo || 0}, Funciones Administrativas: ${p.administrativo || 0}
+- Provincia: ${p.provincia || 'Desconocido'}, Departamento: ${p.departamento || 'Desconocido'}
+
+Usa este contexto para ponderar la gravedad y explicar en el campo "analysis" si el distrito posee suficiente personal operativo de armas para responder eficazmente a este incidente en particular.`;
+      } else {
+        policeContext = `No hay datos registrados sobre el despliegue policial en el distrito de ${data.district}.`;
+      }
+    } catch (err) {
+      functions.logger.error('Error fetching police allocation context:', err);
+    }
 
     try {
-      // 1. Análisis de Imagen (Cloud Vision) — Requires billing, kept simulated
-      if (incidente.evidencia?.fotoUrl) {
-        functions.logger.info("Foto detectada — incrementando score base");
-        iaScore += 0.2; // Having photo evidence raises confidence
-      }
+      // Call Gemini API
+      const prompt = `Eres un sistema de triaje policial en Arequipa, Perú.
+Analiza el siguiente reporte ciudadano y responde SOLO con un JSON con estos campos:
+- "score": número de 0 a 1 (0=falsa alarma, 1=emergencia crítica)
+- "priority": "low" | "medium" | "high" | "critical"  
+- "analysis": resumen explicativo en español de máximo 100 palabras que justifique la prioridad e incorpore análisis del despliegue policial local si está disponible.
+- "isFalseAlarm": boolean
 
-      // 2. Análisis de Texto REAL (NLP con Gemini)
-      if (incidente.descripcion) {
-        functions.logger.info("Analizando texto con Gemini AI...");
+${policeContext}
 
-        try {
-          const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-          const prompt = `Analiza este reporte de incidente de seguridad ciudadana en Arequipa, Perú: "${incidente.descripcion}". 
-          
-          Responde ÚNICAMENTE con un JSON válido (sin markdown, sin backticks) con esta estructura exacta:
-          {
-            "is_spam": boolean,
-            "urgency_score": número del 1 al 10,
-            "keywords": ["palabra1", "palabra2"],
-            "category_suggestion": "robo_mano_armada" | "vandalismo" | "sospechoso" | "accidente"
-          }`;
+REPORTE:
+Tipo: ${data.type}
+Distrito: ${data.district}
+Descripción: ${data.description}
 
-          const result = await model.generateContent(prompt);
-          const responseText = result.response.text();
-          
-          // Clean response (remove possible markdown backticks)
-          const cleanJson = responseText
-            .replace(/```json\n?/g, "")
-            .replace(/```\n?/g, "")
-            .trim();
-          
-          const analysis = JSON.parse(cleanJson);
-          
-          functions.logger.info("Resultado Gemini:", analysis);
+Responde SOLO con el JSON, sin texto adicional.`;
 
-          if (analysis.is_spam) {
-            estado = "falsa_alarma";
-            iaScore = 0.1;
-            functions.logger.info("Reporte clasificado como SPAM");
-          } else if (analysis.urgency_score > 7) {
-            prioridad = 1;
-            iaScore += 0.3;
-            functions.logger.info(`Alta urgencia detectada: ${analysis.urgency_score}/10`);
-          } else if (analysis.urgency_score > 4) {
-            prioridad = 2;
-            iaScore += 0.15;
-          }
-
-          // Store AI analysis in the document
-          await snap.ref.update({
-            "metadata.ia_analysis": analysis,
-            "metadata.ia_keywords": analysis.keywords || [],
-          });
-
-        } catch (aiError) {
-          functions.logger.error("Error en Gemini, fallback a análisis básico:", aiError);
-          
-          // Fallback: basic keyword analysis
-          const desc = incidente.descripcion.toLowerCase();
-          if (desc.includes("arma") || desc.includes("herido") || desc.includes("sangre") || desc.includes("disparo")) {
-            prioridad = 1;
-            iaScore = 0.95;
-          } else if (desc.includes("robo") || desc.includes("asalto") || desc.includes("golpe")) {
-            prioridad = 2;
-            iaScore = 0.7;
-          }
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 512 },
+          }),
         }
-      }
+      );
 
-      // 3. Cálculo final y actualización
-      iaScore = Math.min(1.0, iaScore);
+      const json  = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+      const raw   = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
+      const clean = raw.replace(/```json|```/g, '').trim();
+      const result= JSON.parse(clean) as { score: number; priority: string; analysis: string; isFalseAlarm: boolean };
 
-      // Check user Trust Score
-      const userRef = db.collection("usuarios").doc(incidente.usuarioId);
-      const userDoc = await userRef.get();
-      const trustScore = userDoc.exists ? userDoc.data()?.trust_score : 50;
+      const newStatus = result.isFalseAlarm ? 'false_alarm' : 'pending';
 
-      if (trustScore < 30 && iaScore < 0.6) {
-        estado = "revision_manual";
-      }
-
-      // Update the incident
-      await snap.ref.update({
-        estado,
-        prioridad,
-        "evidencia.ia_score": iaScore,
-        "metadata.fecha_revision_ia": admin.firestore.FieldValue.serverTimestamp(),
+      await db.doc(`reports/${reportId}`).update({
+        aiScore:    result.score,
+        aiAnalysis: result.analysis,
+        priority:   result.priority,
+        status:     newStatus,
       });
 
-      // Update user report count
-      if (userDoc.exists) {
-        await userRef.update({
-          reportes_total: admin.firestore.FieldValue.increment(1),
+      // Update user trust score if false alarm
+      if (result.isFalseAlarm && data.authorId && data.authorId !== 'etl_import') {
+        const userRef = db.doc(`users/${data.authorId}`);
+        await db.runTransaction(async (tx) => {
+          const userSnap = await tx.get(userRef);
+          if (!userSnap.exists) return;
+          const u = userSnap.data()!;
+          const total    = (u['totalReports']   ?? 0) + 1;
+          const verified = u['verifiedReports'] ?? 0;
+          const falseAlarms = (u['falseAlarms'] ?? 0) + 1;
+          const ts = total > 0
+            ? Math.max(0, Math.min(100, ((verified - falseAlarms * 5) / total) * 100))
+            : 100;
+          tx.update(userRef, { totalReports: total, falseAlarms, trustScore: Math.round(ts) });
         });
       }
 
-      functions.logger.info(
-        `Incidente ${incidenteId} procesado. Estado: ${estado}, Prioridad: ${prioridad}, IA Score: ${iaScore}`
-      );
-
-    } catch (error) {
-      functions.logger.error("Error en el pipeline de IA:", error);
-      await snap.ref.update({ estado: "revision_manual" });
+      functions.logger.info(`[RF1] Triaje OK: ${reportId} → score=${result.score} priority=${result.priority}`);
+    } catch (err) {
+      functions.logger.error('[RF1] Triage error:', err);
     }
-  });
+  }
+);
+
+// ── RF5: Scheduled analytics aggregation ─────────────────
+// Runs every hour to aggregate district-level stats
+export const aggregateAnalytics = functions.scheduler.onSchedule(
+  'every 60 minutes',
+  async () => {
+    const snap = await db.collection('reports').where('status', '!=', 'false_alarm').get();
+    const byDistrict: Record<string, { total: number; byType: Record<string, number>; byHour: Record<number,number> }> = {};
+
+    snap.forEach(doc => {
+      const d = doc.data();
+      const district = d['district'] ?? 'Desconocido';
+      if (!byDistrict[district]) byDistrict[district] = { total: 0, byType: {}, byHour: {} };
+      byDistrict[district].total++;
+      byDistrict[district].byType[d['type']] = (byDistrict[district].byType[d['type']] ?? 0) + 1;
+      byDistrict[district].byHour[d['hour']] = (byDistrict[district].byHour[d['hour']] ?? 0) + 1;
+    });
+
+    const batch = db.batch();
+    for (const [district, stats] of Object.entries(byDistrict)) {
+      const ref = db.doc(`analytics/${encodeURIComponent(district)}`);
+      batch.set(ref, { ...stats, lastUpdated: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    }
+    await batch.commit();
+    functions.logger.info(`[RF5] Analytics aggregated for ${Object.keys(byDistrict).length} districts`);
+  }
+);

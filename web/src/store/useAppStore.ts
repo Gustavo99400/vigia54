@@ -1,59 +1,96 @@
-import { create } from "zustand";
+'use client';
+// ============================================================
+// VIGÍA 54 — Zustand Global Store
+// ============================================================
+import { create } from 'zustand';
+import type { AppUser, Report, FilterState } from '@/types';
 
-import { UserRole } from "@/types";
-
-interface UserData {
-  uid: string;
-  email: string | null;
-  displayName: string | null;
-  photoURL: string | null;
-  role: UserRole;
+export interface EtlProgressState {
+  status: 'idle' | 'parsing' | 'uploading' | 'done' | 'error';
+  total: number;
+  loaded: number;
+  errors: string[];
+  fileName: string;
 }
 
-interface Location {
-  latitude: number;
-  longitude: number;
-  accuracy?: number;
+interface AppStore {
+  // Auth state
+  user:        AppUser | null;
+  authLoading: boolean;
+  setUser:     (user: AppUser | null) => void;
+  setAuthLoading: (v: boolean) => void;
+
+  // Reports
+  reports:     Report[];
+  setReports:  (reports: Report[]) => void;
+
+  // Filters (RF4)
+  filters: FilterState;
+  setFilter: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
+  resetFilters: () => void;
+
+  // UI
+  sidebarOpen: boolean;
+  toggleSidebar: () => void;
+
+  // Notifications
+  notification: { type: 'success' | 'error' | 'info'; message: string } | null;
+  showNotification: (type: 'success' | 'error' | 'info', message: string) => void;
+  clearNotification: () => void;
+
+  // ETL global progress
+  etlProgress: EtlProgressState | null;
+  setEtlProgress: (updater: Partial<EtlProgressState> | ((prev: EtlProgressState | null) => Partial<EtlProgressState>)) => void;
+  clearEtlProgress: () => void;
 }
 
-interface AppState {
+const DEFAULT_FILTERS: FilterState = {
+  district:  '',
+  type:      '',
+  status:    '',
+  startHour: 0,
+  endHour:   23,
+  dateFrom:  '',
+  dateTo:    '',
+};
+
+export const useAppStore = create<AppStore>((set) => ({
   // Auth
-  user: UserData | null;
-  setUser: (user: UserData) => void;
-  clearUser: () => void;
-  setRole: (role: UserRole) => void;
+  user:        null,
+  authLoading: true,
+  setUser:     (user)        => set({ user }),
+  setAuthLoading: (authLoading) => set({ authLoading }),
 
-  // Location
-  location: Location | null;
-  setLocation: (location: Location) => void;
+  // Reports
+  reports:    [],
+  setReports: (reports) => set({ reports }),
 
-  // Panic
-  isPanicMode: boolean;
-  setPanicMode: (status: boolean) => void;
+  // Filters
+  filters:     DEFAULT_FILTERS,
+  setFilter:   (key, value) => set((s) => ({ filters: { ...s.filters, [key]: value } })),
+  resetFilters: () => set({ filters: DEFAULT_FILTERS }),
 
-  // Trust
-  trustScore: number;
-  setTrustScore: (score: number) => void;
-}
+  // UI
+  sidebarOpen:   true,
+  toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
-export const useAppStore = create<AppState>((set) => ({
-  // Auth
-  user: null,
-  setUser: (user) => set({ user }),
-  clearUser: () => set({ user: null }),
-  setRole: (role) => set(state => ({
-    user: state.user ? { ...state.user, role } : null
-  })),
+  // Notifications
+  notification: null,
+  showNotification: (type, message) => {
+    set({ notification: { type, message } });
+    setTimeout(() => set({ notification: null }), 4000);
+  },
+  clearNotification: () => set({ notification: null }),
 
-  // Location
-  location: null,
-  setLocation: (location) => set({ location }),
-
-  // Panic
-  isPanicMode: false,
-  setPanicMode: (status) => set({ isPanicMode: status }),
-
-  // Trust
-  trustScore: 100,
-  setTrustScore: (score) => set({ trustScore: score }),
+  // ETL global progress
+  etlProgress: null,
+  setEtlProgress: (updater) => set((state) => {
+    const next = typeof updater === 'function' ? updater(state.etlProgress) : updater;
+    return {
+      etlProgress: state.etlProgress 
+        ? { ...state.etlProgress, ...next } 
+        : { status: 'idle', total: 0, loaded: 0, errors: [], fileName: '', ...next }
+    };
+  }),
+  clearEtlProgress: () => set({ etlProgress: null }),
 }));

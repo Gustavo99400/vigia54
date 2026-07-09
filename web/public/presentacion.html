@@ -1,0 +1,1570 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vigía 54 — Presentación Académica Premium</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500&display=swap"
+    rel="stylesheet">
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* ── Theme Tokens (Premium Light) ── */
+    :root {
+      --bg-main: #f8fafc;
+      --bg-card: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --text-light: #64748b;
+
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-light: #eff6ff;
+      --primary-glow: rgba(37, 99, 235, 0.15);
+
+      --success: #10b981;
+      --success-light: #ecfdf5;
+      --danger: #ef4444;
+      --danger-light: #fef2f2;
+      --warning: #f59e0b;
+      --warning-light: #fef3c7;
+
+      --border: #e2e8f0;
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.02);
+      --shadow-md: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.05);
+      --shadow-lg: 0 20px 50px -12px rgba(15, 23, 42, 0.08);
+
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 24px;
+
+      --font-sans: 'Plus Jakarta Sans', sans-serif;
+      --font-title: 'Outfit', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+    }
+
+    /* ── Reset & Scroll Snap ── */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      color: var(--text-main);
+      background-color: var(--bg-main);
+      overflow: hidden;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Reading Progress Bar */
+    .progress-bar-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 6px;
+      background: var(--border);
+      z-index: 1000;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--primary) 0%, #3b82f6 50%, var(--success) 100%);
+      transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* Presentation Scroll Container */
+    .deck-container {
+      width: 100vw;
+      height: 100vh;
+      overflow-y: scroll;
+      scroll-snap-type: y mandatory;
+      scroll-behavior: smooth;
+    }
+
+    /* ── Slide Layout ── */
+    .slide {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 4rem 8rem;
+      scroll-snap-align: start;
+      position: relative;
+      background-color: var(--bg-main);
+      overflow: hidden;
+    }
+
+    .slide:nth-child(even) {
+      background-color: #ffffff;
+    }
+
+    /* Slide Inner Content Box */
+    .slide-content {
+      max-width: 1200px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      z-index: 2;
+      opacity: 0;
+      transform: translateY(40px);
+      transition: all 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .slide.active .slide-content {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── Typography ── */
+    h1,
+    h2,
+    h3,
+    h4 {
+      font-family: var(--font-title);
+      font-weight: 800;
+      line-height: 1.15;
+    }
+
+    h1 {
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      color: var(--text-main);
+      letter-spacing: -0.03em;
+    }
+
+    h2 {
+      font-size: clamp(1.8rem, 3.8vw, 2.8rem);
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      letter-spacing: -0.02em;
+    }
+
+    h3 {
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+
+    h4 {
+      font-size: 1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-light);
+    }
+
+    .slide-subtitle {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      max-width: 850px;
+      font-weight: 400;
+    }
+
+    /* ── UI Elements ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0.4rem 0.85rem;
+      font-size: 0.725rem;
+      font-weight: 800;
+      border-radius: var(--radius-sm);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      width: fit-content;
+    }
+
+    .badge-primary {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+
+    .badge-success {
+      background: var(--success-light);
+      color: var(--success);
+    }
+
+    .badge-warning {
+      background: var(--warning-light);
+      color: var(--warning);
+    }
+
+    .badge-danger {
+      background: var(--danger-light);
+      color: var(--danger);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2.5rem;
+      align-items: center;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 2rem;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 2rem;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card:hover {
+      transform: translateY(-6px);
+      box-shadow: var(--shadow-lg);
+      border-color: var(--primary);
+    }
+
+    /* ── Floating Controls ── */
+    .controls {
+      position: fixed;
+      bottom: 2.5rem;
+      right: 2.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      z-index: 100;
+    }
+
+    .btn-ctrl {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn-ctrl:hover {
+      background: var(--primary-light);
+      color: var(--primary);
+      border-color: var(--primary);
+      transform: scale(1.1);
+    }
+
+    /* Dot Navigation */
+    .nav-dots {
+      position: fixed;
+      right: 2.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      z-index: 100;
+    }
+
+    .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .dot.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      transform: scale(1.4);
+    }
+
+    /* Decorative Background Mesh */
+    .background-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(var(--border) 1px, transparent 1px),
+        radial-gradient(var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      background-position: 0 0, 20px 20px;
+      opacity: 0.4;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .ambient-glow {
+      position: absolute;
+      width: 50vw;
+      height: 50vw;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(37, 99, 235, 0.07) 0%, transparent 70%);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .glow-1 {
+      top: -10%;
+      left: -10%;
+    }
+
+    .glow-2 {
+      bottom: -10%;
+      right: -10%;
+    }
+
+    /* ── Slide 1: Cover Page ── */
+    .hero-container {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    .hero-title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .hero-meta {
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+      padding: 1.5rem 3rem;
+      border-radius: var(--radius-lg);
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      box-shadow: var(--shadow-md);
+    }
+
+    .avatar-badge {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      color: white;
+      font-weight: 800;
+      font-size: 1.15rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+    }
+
+    /* ── Slide 3: Interactive Architecture ── */
+    .arch-diagram {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      padding: 2rem 0;
+    }
+
+    .arch-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      padding: 1rem;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      z-index: 10;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      width: 140px;
+      text-align: center;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .arch-node:hover,
+    .arch-node.active {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      transform: scale(1.05);
+      box-shadow: var(--shadow-md);
+    }
+
+    .arch-node-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-light);
+      transition: all 0.3s;
+    }
+
+    .arch-node:hover .arch-node-icon,
+    .arch-node.active .arch-node-icon {
+      background: var(--primary);
+      color: white;
+    }
+
+    .arch-node-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .arch-connector {
+      flex: 1;
+      height: 2px;
+      background: var(--border);
+      position: relative;
+      z-index: 5;
+    }
+
+    .arch-connector.active::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 100%;
+      background: var(--primary);
+      animation: connectionFlow 1.5s linear infinite;
+    }
+
+    @keyframes connectionFlow {
+      0% {
+        transform: scaleX(0);
+        transform-origin: left;
+      }
+
+      50% {
+        transform: scaleX(1);
+        transform-origin: left;
+      }
+
+      50.1% {
+        transform-origin: right;
+      }
+
+      100% {
+        transform: scaleX(0);
+        transform-origin: right;
+      }
+    }
+
+    /* ── Slide 4: Interactive Quality Pipeline ── */
+    .pipeline-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.5rem;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .pipeline-stages {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 2rem;
+    }
+
+    .stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      opacity: 0.5;
+      transition: all 0.3s;
+    }
+
+    .stage.active {
+      opacity: 1;
+    }
+
+    .stage-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--text-light);
+    }
+
+    .stage.active .stage-icon {
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 0 15px var(--primary-glow);
+    }
+
+    .stage.passed .stage-icon {
+      background: var(--success);
+      color: white;
+    }
+
+    .console-box {
+      background: #0f172a;
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+      height: 180px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: #38bdf8;
+      overflow-y: auto;
+      border: 1px solid #1e293b;
+      box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+    }
+
+    /* ── Slide 5: Interactive Requirement Catalog ── */
+    .filter-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .filter-btn {
+      padding: 0.4rem 1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      color: var(--text-light);
+      transition: all 0.2s;
+    }
+
+    .filter-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .req-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      max-height: 380px;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    }
+
+    .req-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-card);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .req-item:hover,
+    .req-item.active {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    .req-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .req-id {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-light);
+    }
+
+    .req-item.active .req-id {
+      background: var(--primary);
+      color: white;
+    }
+
+    .req-name {
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    /* ── Slide 6: Premium Calculator ── */
+    .calculator-layout {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 3rem;
+      background: var(--bg-card);
+      padding: 2.5rem;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-md);
+    }
+
+    .calc-sliders {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    .slider-input {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: var(--border);
+      outline: none;
+    }
+
+    .slider-input::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+      transition: transform 0.1s;
+    }
+
+    .slider-input::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .dial-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .svg-dial {
+      transform: rotate(-90deg);
+    }
+
+    .dial-bg {
+      fill: none;
+      stroke: var(--border);
+      stroke-width: 12;
+    }
+
+    .dial-fill {
+      fill: none;
+      stroke: var(--primary);
+      stroke-width: 12;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.4s ease-out, stroke 0.3s;
+    }
+
+    .dial-text {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .dial-val {
+      font-family: var(--font-title);
+      font-size: 3.5rem;
+      font-weight: 900;
+      color: var(--text-main);
+      line-height: 1;
+    }
+
+    .dial-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-light);
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Slide 7: Animated Progress Rings ── */
+    .metric-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 1.5rem;
+      padding: 2.5rem 1.5rem;
+    }
+
+    .progress-ring-container {
+      position: relative;
+      width: 120px;
+      height: 120px;
+    }
+
+    .ring-fill-anim {
+      fill: none;
+      stroke-width: 10;
+      stroke-linecap: round;
+      transform: rotate(-90deg);
+      transform-origin: 50% 50%;
+      transition: stroke-dashoffset 1s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .ring-value-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-title);
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 99px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-light);
+    }
+
+    /* Responsive */
+    @media (max-width: 1000px) {
+      .slide {
+        padding: 2rem 4rem;
+      }
+
+      .grid-2,
+      .grid-3 {
+        grid-template-columns: 1fr;
+      }
+
+      .calculator-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .arch-diagram {
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .arch-connector {
+        display: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Reading Progress Bar -->
+  <div class="progress-bar-container" role="progressbar" aria-label="Progreso de la presentación">
+    <div class="progress-bar" id="progress-indicator"></div>
+  </div>
+
+  <!-- Dot Navigation -->
+  <div class="nav-dots" role="navigation" aria-label="Navegación de diapositivas">
+    <div class="dot active" onclick="scrollToSlide(0)" title="Portada"></div>
+    <div class="dot" onclick="scrollToSlide(1)" title="Problemática y Datos Abiertos"></div>
+    <div class="dot" onclick="scrollToSlide(2)" title="Arquitectura y Pipeline"></div>
+    <div class="dot" onclick="scrollToSlide(3)" title="Proceso y Calidad"></div>
+    <div class="dot" onclick="scrollToSlide(4)" title="Catálogo de Requisitos"></div>
+    <div class="dot" onclick="scrollToSlide(5)" title="Algoritmo de Confianza"></div>
+    <div class="dot" onclick="scrollToSlide(6)" title="Métricas de Pruebas"></div>
+    <div class="dot" onclick="scrollToSlide(7)" title="Cierre e Información"></div>
+  </div>
+
+  <!-- Ambient Decorative elements -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+
+  <!-- Deck Container -->
+  <div class="deck-container" id="deck">
+    <div class="background-grid"></div>
+
+    <!-- Slide 1: Portada Premium -->
+    <section class="slide active">
+      <div class="slide-content hero-container">
+        <span class="badge badge-primary"><i data-lucide="shield"></i> Proyecto Fin de Curso - Calidad de
+          Software</span>
+
+        <div class="hero-title-group">
+          <h1>Vigía 54</h1>
+          <p class="slide-subtitle"
+            style="font-size: 1.4rem; font-weight: 500; color: var(--text-main); max-width: 900px; line-height: 1.3;">
+            Sistema Inteligente de Predicción y Reporte de Incidencias Delictivas en Arequipa basado en Datos Abiertos y
+            Calidad de Software
+          </p>
+        </div>
+
+        <div class="hero-meta">
+          <div class="avatar-badge">GF</div>
+          <div style="text-align: left;">
+            <div style="font-weight: 800; font-size: 1.15rem; color: var(--text-main);">Gustavo Alexander Flores Vera
+            </div>
+            <div style="font-size: 0.85rem; color: var(--text-light); font-weight: 500;">
+              Universidad La Salle | Arequipa, Perú
+            </div>
+            <div style="font-size: 0.8rem; color: var(--primary); font-family: var(--font-mono); margin-top: 2px;">
+              gfloresv@ulasalle.edu.pe
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 2: Problemática y Datos Abiertos -->
+    <section class="slide">
+      <div class="slide-content">
+        <span class="badge badge-primary"><i data-lucide="info"></i> Contexto & Fundamentación</span>
+        <h2><i data-lucide="database"></i> Seguridad basada en Datos Abiertos (Open Data)</h2>
+        <p class="slide-subtitle">
+          El diseño preventivo parte de evidencia cuantitativa limpia y accesible, eliminando la burocracia de los
+          canales tradicionales.
+        </p>
+
+        <div class="grid-2">
+          <div class="card" style="display: flex; flex-direction: column; gap: 1rem;">
+            <div
+              style="color: var(--danger); background: var(--danger-light); width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+              <i data-lucide="alert-octagon"></i>
+            </div>
+            <div>
+              <h3 style="margin-bottom: 0.5rem; font-size: 1.2rem;">Problema Crítico de Seguridad</h3>
+              <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.6;">
+                Canales de denuncia tradicionales fragmentados, lentos y carentes de un enfoque predictivo. Los
+                ciudadanos carecen de información geoespacial activa para protegerse en entornos de alto riesgo.
+              </p>
+            </div>
+          </div>
+
+          <div class="card" style="display: flex; flex-direction: column; gap: 1rem;">
+            <div
+              style="color: var(--success); background: var(--success-light); width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+              <i data-lucide="file-check"></i>
+            </div>
+            <div>
+              <h3 style="margin-bottom: 0.5rem; font-size: 1.2rem;">Dataset Oficial del Estado Peruano</h3>
+              <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.6;">
+                Consumo del dataset de "Denuncias por Delitos y Faltas de la PNP" obtenido del Portal Nacional de Datos
+                Abiertos. Contiene registros históricos de distritos, tipo de delito, coordenadas exactas, fecha y hora
+                de los hechos.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 3: Arquitectura y Pipeline Interactivo -->
+    <section class="slide">
+      <div class="slide-content">
+        <span class="badge badge-primary"><i data-lucide="git-branch"></i> Arquitectura en la Nube</span>
+        <h2><i data-lucide="network"></i> Pipeline de Datos y Flujo de IA</h2>
+
+
+        <!-- Interactive Diagram -->
+        <div class="arch-diagram">
+          <div class="arch-node active" id="node-pwa" onclick="showArchDetail('pwa')">
+            <div class="arch-node-icon"><i data-lucide="smartphone"></i></div>
+            <span class="arch-node-label">PWA (Next.js)</span>
+          </div>
+          <div class="arch-connector active" id="conn-1"></div>
+          <div class="arch-node" id="node-auth" onclick="showArchDetail('auth')">
+            <div class="arch-node-icon"><i data-lucide="key-round"></i></div>
+            <span class="arch-node-label">Firebase Auth</span>
+          </div>
+          <div class="arch-connector" id="conn-2"></div>
+          <div class="arch-node" id="node-firestore" onclick="showArchDetail('firestore')">
+            <div class="arch-node-icon"><i data-lucide="database"></i></div>
+            <span class="arch-node-label">Cloud Firestore</span>
+          </div>
+          <div class="arch-connector" id="conn-3"></div>
+          <div class="arch-node" id="node-functions" onclick="showArchDetail('functions')">
+            <div class="arch-node-icon"><i data-lucide="server"></i></div>
+            <span class="arch-node-label">Cloud Functions</span>
+          </div>
+          <div class="arch-connector" id="conn-4"></div>
+          <div class="arch-node" id="node-gemini" onclick="showArchDetail('gemini')">
+            <div class="arch-node-icon"><i data-lucide="sparkles"></i></div>
+            <span class="arch-node-label">Google Gemini</span>
+          </div>
+        </div>
+
+        <!-- Detail Box -->
+        <div class="card" style="border-left: 4px solid var(--primary); background: var(--primary-light);">
+          <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 8px;" id="arch-detail-title">
+            <i data-lucide="smartphone" size="18" style="color: var(--primary);"></i> Cliente PWA (Next.js)
+          </h3>
+          <p id="arch-detail-desc" style="font-size: 0.95rem; color: var(--text-muted);">
+            Interfaz responsiva multiplataforma de alta velocidad que ofrece formularios de captura con geolocalización
+            nativa, panel de visualización geoespacial con Leaflet y dashboards analíticos para gestores.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 4: Proceso y Simulador de Quality Gate -->
+    <section class="slide">
+      <div class="slide-content">
+        <span class="badge badge-primary"><i data-lucide="check-square"></i> Gobierno de Calidad</span>
+        <h2><i data-lucide="terminal"></i> DevOps y Calidad ISO/IEC 25010</h2>
+        <p class="slide-subtitle">
+
+
+        <div class="grid-2">
+          <!-- Interactive Job Runner -->
+          <div class="pipeline-container">
+            <div class="pipeline-stages">
+              <div class="stage" id="stage-lint">
+                <div class="stage-icon">ES</div>
+                <span style="font-size: 0.75rem; font-weight: 700;">Lint & Types</span>
+              </div>
+              <div class="stage" id="stage-jest">
+                <div class="stage-icon">JT</div>
+                <span style="font-size: 0.75rem; font-weight: 700;">Jest Tests</span>
+              </div>
+              <div class="stage" id="stage-sonar">
+                <div class="stage-icon">SQ</div>
+                <span style="font-size: 0.75rem; font-weight: 700;">SonarQube</span>
+              </div>
+            </div>
+
+            <button class="btn-ctrl" id="btn-run-pipeline" onclick="runMockPipeline()"
+              style="width: 100%; border-radius: 8px; font-weight: 700; color: white; background: var(--primary); font-family: var(--font-title); display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <i data-lucide="play" size="16"></i> Iniciar Pruebas de Calidad
+            </button>
+          </div>
+
+          <!-- Console log output -->
+          <div class="console-box" id="pipeline-console">
+            $ git push origin main<br>
+            Esperando ejecutor...
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 5: Catálogo de Requisitos con Filtros -->
+    <section class="slide">
+      <div class="slide-content">
+        <span class="badge badge-primary"><i data-lucide="sliders"></i> Triaje & Filtros</span>
+        <h2><i data-lucide="activity"></i> Catálogo Completo de Requisitos (RF)</h2>
+        <p class="slide-subtitle">
+          Mapeo y segmentación del alcance del proyecto según su complejidad técnica y lógica de negocio:
+        </p>
+
+        <div class="grid-2">
+          <div>
+            <!-- Filters -->
+            <div class="filter-bar">
+              <button class="filter-btn active" onclick="filterRequirements('all')">Todos</button>
+              <button class="filter-btn" onclick="filterRequirements('high')">Alta</button>
+              <button class="filter-btn" onclick="filterRequirements('medium')">Media</button>
+              <button class="filter-btn" onclick="filterRequirements('low')">Baja</button>
+            </div>
+
+            <!-- List -->
+            <div class="req-list" id="req-list-box">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+
+          <!-- Info display -->
+          <div class="card" id="req-detail-card" style="border-left: 4px solid var(--danger);">
+            <div
+              style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+              <span class="badge badge-danger" id="req-badge">Complejidad Alta</span>
+              <span id="req-tech"
+                style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-light);">GCP / Gemini</span>
+            </div>
+            <h3 id="req-title" style="margin-bottom: 0.5rem; font-size: 1.2rem;">RF1: Triaje con IA</h3>
+            <p id="req-desc" style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.6;">
+              El sistema debe analizar de forma asíncrona la descripción textual y los archivos multimedia adjuntos por
+              los ciudadanos utilizando la API de Google Gemini para clasificar automáticamente el incidente según su
+              gravedad y descartar contenido sospechoso o de spam.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 6: Algoritmo de Confianza (Sliders y Dial Dinámico) -->
+    <section class="slide">
+      <div class="slide-content">
+        <span class="badge badge-primary"><i data-lucide="settings"></i> Algoritmia del Negocio</span>
+        <h2><i data-lucide="shield-check"></i> Reputación Inteligente: Trust Score (TS)</h2>
+        <p class="slide-subtitle">
+          Utiliza los controles deslizantes para simular el comportamiento reputacional del ciudadano en base a sus
+          reportes históricos:
+        </p>
+
+        <div class="calculator-layout">
+          <div class="calc-sliders">
+            <div class="slider-group">
+              <div class="slider-header">
+                <span>R<sub>verificados</sub> (Reportes Corroborados)</span>
+                <span id="lbl-verif">12</span>
+              </div>
+              <input type="range" id="slide-verif" class="slider-input" min="0" max="30" value="12"
+                oninput="updateTrustCalc()">
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <span>R<sub>falsas</sub> (Falsas Alarmas / Spam)</span>
+                <span id="lbl-false">1</span>
+              </div>
+              <input type="range" id="slide-false" class="slider-input" min="0" max="10" value="1"
+                oninput="updateTrustCalc()">
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <span>R<sub>totales</sub> (Total Reportes Enviados)</span>
+                <span id="lbl-total">15</span>
+              </div>
+              <input type="range" id="slide-total" class="slider-input" min="0" max="50" value="15"
+                oninput="updateTrustCalc()">
+            </div>
+          </div>
+
+          <!-- Dynamic SVG Radial Dial -->
+          <div class="dial-container">
+            <svg width="180" height="180" class="svg-dial">
+              <circle cx="90" cy="90" r="75" class="dial-bg"></circle>
+              <circle cx="90" cy="90" r="75" class="dial-fill" id="dial-indicator" stroke-dasharray="471.2"
+                stroke-dashoffset="150"></circle>
+            </svg>
+            <div class="dial-text">
+              <span class="dial-val" id="dial-val-text">46.7</span>
+              <span class="dial-label" id="dial-status-text">Aprobado</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 7: Métricas de Auditoría (Animated Rings) -->
+    <section class="slide" id="slide-metrics">
+      <div class="slide-content">
+        <span class="badge badge-primary"><i data-lucide="gauge"></i> Aseguramiento de Calidad</span>
+        <h2><i data-lucide="badge-check"></i> Calificación Grado A y Pruebas Unitarias</h2>
+        <p class="slide-subtitle">
+          El análisis estático en SonarQube y la suite automatizada de pruebas unitarias en Jest respaldan la robustez
+          estructural de la plataforma:
+        </p>
+
+        <div class="grid-3">
+          <!-- Coverage -->
+          <div class="card metric-card">
+            <div class="progress-ring-container">
+              <svg width="120" height="120">
+                <circle cx="60" cy="60" r="50" stroke="#f1f5f9" stroke-width="10" fill="none"></circle>
+                <circle cx="60" cy="60" r="50" class="ring-fill-anim" id="ring-cov" stroke="var(--primary)"
+                  stroke-dasharray="314.16" stroke-dashoffset="314.16"></circle>
+              </svg>
+              <div class="ring-value-text" id="txt-cov">0%</div>
+            </div>
+            <div>
+              <h3>87.33% Cobertura</h3>
+              <p style="font-size: 0.8rem; color: var(--text-light); margin-top: 0.5rem;">Cobertura global de código en
+                lógica comercial, Zustand y endpoints.</p>
+            </div>
+          </div>
+
+          <!-- Mantenibilidad -->
+          <div class="card metric-card">
+            <div class="progress-ring-container">
+              <svg width="120" height="120">
+                <circle cx="60" cy="60" r="50" stroke="#f1f5f9" stroke-width="10" fill="none"></circle>
+                <circle cx="60" cy="60" r="50" class="ring-fill-anim" id="ring-mant" stroke="var(--success)"
+                  stroke-dasharray="314.16" stroke-dashoffset="0"></circle>
+              </svg>
+              <div class="ring-value-text" style="color: var(--success); font-size: 2rem;">A</div>
+            </div>
+            <div>
+              <h3>Calificación SonarQube</h3>
+              <p style="font-size: 0.8rem; color: var(--text-light); margin-top: 0.5rem;">0 bugs y 0 vulnerabilidades de
+                seguridad críticas detectadas en la base.</p>
+            </div>
+          </div>
+
+          <!-- Deuda -->
+          <div class="card metric-card">
+            <div class="progress-ring-container">
+              <svg width="120" height="120">
+                <circle cx="60" cy="60" r="50" stroke="#f1f5f9" stroke-width="10" fill="none"></circle>
+                <circle cx="60" cy="60" r="50" class="ring-fill-anim" id="ring-debt" stroke="#8b5cf6"
+                  stroke-dasharray="314.16" stroke-dashoffset="314.16"></circle>
+              </svg>
+              <div class="ring-value-text" id="txt-debt">0%</div>
+            </div>
+            <div>
+              <h3>0.3% Deuda Técnica</h3>
+              <p style="font-size: 0.8rem; color: var(--text-light); margin-top: 0.5rem;">Deuda técnica reducida al
+                mínimo (límite establecido por ISO 25010: &lt;5%).</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 8: Cierre y Acceso a Producción -->
+    <section class="slide hero-slide">
+      <div class="slide-content hero-container">
+        <span class="badge badge-success"><i data-lucide="check-circle2"></i> Cierre de Proyecto</span>
+        <h2>Vigía 54: Desplegado y Operativo</h2>
+        <p class="slide-subtitle" style="font-size: 1.2rem; text-align: center;">
+          Una solución robusta, mantenible y escalable para descentralizar la seguridad en Arequipa basada en Datos
+          Abiertos e IA.
+        </p>
+
+        <div style="display: flex; gap: 2rem; justify-content: center; margin-top: 1.5rem; width: 100%;">
+          <a href="https://vigia54-5053e.web.app/?authuser=1" target="_blank" class="card"
+            style="text-decoration: none; color: inherit; flex: 1; max-width: 320px; border-color: var(--primary); background: var(--primary-light);">
+            <div
+              style="font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 8px; justify-content: center; font-size: 1.1rem;">
+              <i data-lucide="globe"></i> Plataforma Web Activa
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; text-align: center;">
+              Accede al portal web en producción
+            </div>
+          </a>
+
+          <a href="https://vigia54-5053e.web.app/presentacion" target="_blank" class="card"
+            style="text-decoration: none; color: inherit; flex: 1; max-width: 320px;">
+            <div
+              style="font-weight: 800; display: flex; align-items: center; gap: 8px; justify-content: center; font-size: 1.1rem;">
+              <i data-lucide="presentation"></i> Presentación Interactiva
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; text-align: center;">
+              Enlace directo al Slide Deck actual
+            </div>
+          </a>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Navigation Buttons -->
+  <div class="controls">
+    <button class="btn-ctrl" id="btn-prev" onclick="navigateSlide(-1)" aria-label="Anterior">
+      <i data-lucide="chevron-up"></i>
+    </button>
+    <button class="btn-ctrl" id="btn-next" onclick="navigateSlide(1)" aria-label="Siguiente">
+      <i data-lucide="chevron-down"></i>
+    </button>
+  </div>
+
+  <script>
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    const deck = document.getElementById('deck');
+    const slides = document.querySelectorAll('.slide');
+    const dots = document.querySelectorAll('.dot');
+    const progressBar = document.getElementById('progress-indicator');
+    let currentActiveIndex = 0;
+
+    // Track active slide and progress
+    const observerOptions = {
+      root: deck,
+      threshold: 0.6
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const index = Array.from(slides).indexOf(entry.target);
+          setActiveSlide(index);
+        }
+      });
+    }, observerOptions);
+
+    slides.forEach(slide => observer.observe(slide));
+
+    function setActiveSlide(index) {
+      currentActiveIndex = index;
+
+      // Update progress bar
+      const pct = (index / (slides.length - 1)) * 100;
+      progressBar.style.width = `${pct}%`;
+
+      // Update slide states
+      slides.forEach((slide, idx) => {
+        if (idx === index) {
+          slide.classList.add('active');
+        } else {
+          slide.classList.remove('active');
+        }
+      });
+
+      // Update dot active state
+      dots.forEach((dot, idx) => {
+        if (idx === index) {
+          dot.classList.add('active');
+        } else {
+          dot.classList.remove('active');
+        }
+      });
+
+      // Animate progress rings if slide 7 is active
+      if (index === 6) {
+        animateQualityRings();
+      } else {
+        resetQualityRings();
+      }
+    }
+
+    function scrollToSlide(index) {
+      if (index >= 0 && index < slides.length) {
+        slides[index].scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    function navigateSlide(direction) {
+      const target = currentActiveIndex + direction;
+      scrollToSlide(target);
+    }
+
+    // Keyboard bindings
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+        e.preventDefault();
+        navigateSlide(1);
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        navigateSlide(-1);
+      }
+    });
+
+    // ── Interactive Architecture Lógica (Slide 3) ──
+    const archDetails = {
+      pwa: {
+        title: 'Cliente PWA (Next.js)',
+        icon: 'smartphone',
+        desc: 'Interfaz responsiva multiplataforma de alta velocidad. Ofrece formularios de captura con geolocalización nativa, panel de visualización geoespacial con Leaflet y dashboards analíticos para gestores.',
+        connectors: ['conn-1']
+      },
+      auth: {
+        title: 'Firebase Auth',
+        icon: 'key-round',
+        desc: 'Gobierna los accesos seguros y administra las credenciales. Configura claims personalizados para los roles del sistema (Ciudadano, Agente y Administrador) garantizando control granular.',
+        connectors: ['conn-1', 'conn-2']
+      },
+      firestore: {
+        title: 'Cloud Firestore (NoSQL)',
+        icon: 'database',
+        desc: 'Persistencia documental en tiempo real. Organiza colecciones jerárquicas optimizadas para consultas geoespaciales veloces indexando a través de hashes estructurados.',
+        connectors: ['conn-2', 'conn-3']
+      },
+      functions: {
+        title: 'Cloud Functions (v2)',
+        icon: 'server',
+        desc: 'Backend serverless asíncrono. Responde a triggers de base de datos para invocar el triaje por IA, computa resúmenes estadísticos agregados cada hora y recalcula índices de confianza.',
+        connectors: ['conn-3', 'conn-4']
+      },
+      gemini: {
+        title: 'Google Gemini 2.0 Flash',
+        icon: 'sparkles',
+        desc: 'Modelo generativo para el triaje. Analiza el reporte ciudadano entrante y retorna un JSON estructurado con la confianza, prioridad recomendada y un resumen contextual del evento.',
+        connectors: ['conn-4']
+      }
+    };
+
+    window.showArchDetail = function (nodeKey) {
+      // Remove active states
+      document.querySelectorAll('.arch-node').forEach(node => node.classList.remove('active'));
+      document.querySelectorAll('.arch-connector').forEach(conn => conn.classList.remove('active'));
+
+      // Set active node
+      document.getElementById(`node-${nodeKey}`).classList.add('active');
+
+      const data = archDetails[nodeKey];
+      if (data) {
+        // Activate connectors
+        data.connectors.forEach(connId => {
+          document.getElementById(connId).classList.add('active');
+        });
+
+        // Update detail panel
+        document.getElementById('arch-detail-title').innerHTML = `
+          <i data-lucide="${data.icon}" size="18" style="color: var(--primary);"></i> ${data.title}
+        `;
+        document.getElementById('arch-detail-desc').innerText = data.desc;
+        lucide.createIcons();
+      }
+    };
+
+    // ── Interactive Pipeline Lógica (Slide 4) ──
+    let pipelineRunning = false;
+    window.runMockPipeline = function () {
+      if (pipelineRunning) return;
+      pipelineRunning = true;
+
+      const consoleBox = document.getElementById('pipeline-console');
+      const lintStage = document.getElementById('stage-lint');
+      const jestStage = document.getElementById('stage-jest');
+      const sonarStage = document.getElementById('stage-sonar');
+
+      // Reset stages
+      document.querySelectorAll('.stage').forEach(s => s.className = 'stage');
+      consoleBox.innerHTML = '';
+
+      function log(text, delay) {
+        return new Promise(res => {
+          setTimeout(() => {
+            consoleBox.innerHTML += text + '<br>';
+            consoleBox.scrollTop = consoleBox.scrollHeight;
+            res();
+          }, delay);
+        });
+      }
+
+      (async () => {
+        await log('$ git push origin main', 100);
+        await log('Resolviendo corredor de CI/CD en GitHub Actions...', 500);
+
+        // Stage 1
+        lintStage.classList.add('active');
+        await log('Ejecutando ESLint & Prettier...', 600);
+        await log('TypeScript type-check: OK. (0 advertencias)', 500);
+        lintStage.classList.add('passed');
+
+        // Stage 2
+        jestStage.classList.add('active');
+        await log('Iniciando tests automatizados en Jest...', 600);
+        await log('PASS  src/utils/geo.test.ts (11 tests)', 400);
+        await log('PASS  src/utils/trustScore.test.ts (14 tests)', 400);
+        await log('25 tests completados. Cobertura: 87.33%', 300);
+        jestStage.classList.add('passed');
+
+        // Stage 3
+        sonarStage.classList.add('active');
+        await log('Enviando reportes a SonarQube Cloud...', 600);
+        await log('Auditando Bugs: 0 (Grado A)', 400);
+        await log('Auditando Vulnerabilidades: 0 (Grado A)', 400);
+        await log('Deuda técnica: 0.3%. Duplicidad: 0.4%', 300);
+        await log('<span style="color: var(--success); font-weight:700;">√ Quality Gate aprobado con éxito.</span>', 300);
+        sonarStage.classList.add('passed');
+
+        await log('<span style="color: var(--success); font-weight:700;">Despliegue automático completado en Firebase Hosting.</span>', 500);
+        pipelineRunning = false;
+      })();
+    };
+
+    // ── Interactive Requirements Lógica (Slide 5) ──
+    const requirements = [
+      { id: 1, type: 'high', name: 'RF1: Triaje con IA (Gemini)', tech: 'Cloud Functions / Gemini', desc: 'El sistema debe analizar de forma asíncrona la descripción textual y los archivos multimedia adjuntos por los ciudadanos utilizando la API de Google Gemini para clasificar automáticamente el incidente según su gravedad y descartar contenido sospechoso o de spam.' },
+      { id: 2, type: 'high', name: 'RF2: Mapas de Calor Geoespaciales', tech: 'Leaflet.heat / Geohash', desc: 'El sistema debe calcular zonas de riesgo probabilístico mediante procesamiento geoespacial de la data histórica y renderizar capas dinámicas de calor interactivo sobre la interfaz cartográfica.' },
+      { id: 3, type: 'high', name: 'RF3: Pipeline de Ingesta y ETL', tech: 'CSV Parser / Firestore', desc: 'El sistema debe proveer un pipeline para la carga masiva de archivos estructurados (CSV/JSON) provenientes del portal estatal, validando la integridad de los esquemas de datos antes de poblar la base de datos de producción.' },
+      { id: 4, type: 'medium', name: 'RF4: Consultas y Filtros Geoespaciales', tech: 'Firestore Queries', desc: 'Los usuarios deben poder segmentar visualmente las incidencias delictivas aplicando filtros multi-variable (por distritos de Arequipa, rango horario, tipo de delito y estado de validación).' },
+      { id: 5, type: 'medium', name: 'RF5: Dashboard Analítico e Interactivo', tech: 'Recharts / Next.js', desc: 'El sistema debe compilar métricas agregadas y generar gráficos estadísticos dinámicos del comportamiento delictivo para auditorías de usuarios con roles administrativos o policiales.' },
+      { id: 6, type: 'medium', name: 'RF6: Autenticación Basada en Roles', tech: 'Firebase Auth / JWT', desc: 'Registro seguro de usuarios y verificación de identidad que gobierne los permisos en la plataforma diferenciando tres roles jerárquicos: Ciudadano, Agente Policial y Administrador del Sistema.' },
+      { id: 7, type: 'low', name: 'RF7: Gestión de Perfil de Usuario', tech: 'Zustand / Profile API', desc: 'Permite a los ciudadanos registrados la actualización de sus datos de contacto básicos, credenciales de acceso y preferencias de notificación local.' },
+      { id: 8, type: 'low', name: 'RF8: Formulario de Reporte de Incidencias', tech: 'Web GPS API', desc: 'Interfaz intuitiva estructurada para la captura inmediata de datos de un hecho delictivo (tipo de delito, fecha/hora, descripción detallada y coordenadas por GPS del dispositivo).' }
+    ];
+
+    let currentFilter = 'all';
+
+    function renderRequirements() {
+      const box = document.getElementById('req-list-box');
+      box.innerHTML = '';
+
+      const filtered = requirements.filter(r => currentFilter === 'all' || r.type === currentFilter);
+
+      filtered.forEach((r, idx) => {
+        const item = document.createElement('div');
+        item.className = `req-item ${idx === 0 ? 'active' : ''}`;
+        item.onclick = () => selectRequirement(r.id);
+        item.innerHTML = `
+          <div class="req-left">
+            <div class="req-id">${r.id}</div>
+            <span class="req-name">${r.name}</span>
+          </div>
+          <span class="badge ${r.type === 'high' ? 'badge-danger' : r.type === 'medium' ? 'badge-warning' : 'badge-success'}">${r.type}</span>
+        `;
+        box.appendChild(item);
+      });
+
+      if (filtered.length > 0) {
+        selectRequirement(filtered[0].id);
+      }
+    }
+
+    window.filterRequirements = function (type) {
+      currentFilter = type;
+      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      renderRequirements();
+    };
+
+    function selectRequirement(id) {
+      document.querySelectorAll('.req-item').forEach(item => item.classList.remove('active'));
+      const activeEl = document.querySelector(`.req-item [class*="req-id"]`);
+
+      const req = requirements.find(r => r.id === id);
+      if (req) {
+        // Find element by key and add active
+        const items = document.querySelectorAll('.req-item');
+        items.forEach(item => {
+          if (item.querySelector('.req-id').innerText == id) {
+            item.classList.add('active');
+          }
+        });
+
+        // Update card
+        const card = document.getElementById('req-detail-card');
+        const badge = document.getElementById('req-badge');
+
+        badge.innerText = `Complejidad ${req.type}`;
+        badge.className = `badge ${req.type === 'high' ? 'badge-danger' : req.type === 'medium' ? 'badge-warning' : 'badge-success'}`;
+
+        card.style.borderLeftColor = req.type === 'high' ? 'var(--danger)' : req.type === 'medium' ? 'var(--warning)' : 'var(--success)';
+        document.getElementById('req-title').innerText = req.name;
+        document.getElementById('req-desc').innerText = req.desc;
+        document.getElementById('req-tech').innerText = req.tech;
+      }
+    }
+
+    renderRequirements();
+
+    // ── Interactive Trust Score Lógica (Slide 6) ──
+    window.updateTrustCalc = function () {
+      const verif = parseInt(document.getElementById('slide-verif').value);
+      const falses = parseInt(document.getElementById('slide-false').value);
+      let total = parseInt(document.getElementById('slide-total').value);
+
+      // Total must be at least verif + falses to prevent mathematical anomaly
+      if (total < (verif + falses)) {
+        total = verif + falses;
+        document.getElementById('slide-total').value = total;
+      }
+
+      // Update Labels
+      document.getElementById('lbl-verif').innerText = verif;
+      document.getElementById('lbl-false').innerText = falses;
+      document.getElementById('lbl-total').innerText = total;
+
+      const scoreText = document.getElementById('dial-val-text');
+      const statusText = document.getElementById('dial-status-text');
+      const dialFill = document.getElementById('dial-indicator');
+
+      let ts = 100.0;
+      if (total > 0) {
+        ts = ((verif * 1.0) - (falses * 5.0)) / total * 100;
+        ts = Math.max(0, Math.min(100, ts));
+      }
+
+      scoreText.innerText = ts.toFixed(1);
+
+      // SVG stroke calculation (Radius 75 -> Circumference = 2 * PI * 75 = 471.24)
+      const maxOffset = 471.24;
+      const offset = maxOffset - (ts / 100) * maxOffset;
+      dialFill.style.strokeDashoffset = offset;
+
+      if (ts < 30) {
+        dialFill.style.stroke = 'var(--danger)';
+        statusText.innerText = 'Suspendido';
+        statusText.style.color = 'var(--danger)';
+      } else if (ts < 60) {
+        dialFill.style.stroke = 'var(--warning)';
+        statusText.innerText = 'Observado';
+        statusText.style.color = 'var(--warning)';
+      } else {
+        dialFill.style.stroke = 'var(--success)';
+        statusText.innerText = 'Aprobado';
+        statusText.style.color = 'var(--success)';
+      }
+    };
+
+    updateTrustCalc();
+
+    // ── Slide 7: Quality progress rings animation ──
+    function animateQualityRings() {
+      // Circumference = 2 * PI * 50 = 314.16
+      const ringCov = document.getElementById('ring-cov');
+      const ringDebt = document.getElementById('ring-debt');
+      const txtCov = document.getElementById('txt-cov');
+      const txtDebt = document.getElementById('txt-debt');
+
+      // 87.33% -> offset = 314.16 - (0.8733 * 314.16) = 39.8
+      ringCov.style.strokeDashoffset = 39.8;
+      txtCov.innerText = '87.3%';
+
+      // 0.3% -> offset = 314.16 - (0.003 * 314.16) = 313.2
+      ringDebt.style.strokeDashoffset = 313.2;
+      txtDebt.innerText = '0.3%';
+    }
+
+    function resetQualityRings() {
+      const ringCov = document.getElementById('ring-cov');
+      const ringDebt = document.getElementById('ring-debt');
+      const txtCov = document.getElementById('txt-cov');
+      const txtDebt = document.getElementById('txt-debt');
+
+      ringCov.style.strokeDashoffset = 314.16;
+      ringDebt.style.strokeDashoffset = 314.16;
+      txtCov.innerText = '0%';
+      txtDebt.innerText = '0%';
+    }
+  </script>
+</body>
+
+</html>

@@ -1,53 +1,99 @@
-export type IncidentType = 'robo_mano_armada' | 'sospechoso' | 'accidente' | 'vandalismo' | 'choque' | 'incendio' | 'derrumbe';
-export type IncidentState = 'revision_ia' | 'verificado' | 'atendido' | 'falsa_alarma';
-export type PriorityLevel = 1 | 2 | 3; // 1: Crítica, 2: Alta, 3: Media
-export type UserRole = "ciudadano" | "admin_respuestas" | "admin_sistema" | "serenazgo" | "pnp" | null;
+// ============================================================
+// VIGÍA 54 — Shared TypeScript Types
+// ============================================================
 
-export interface UserData {
+export type UserRole = 'ciudadano' | 'agente' | 'admin';
+
+export type ReportStatus = 'pending' | 'verified' | 'false_alarm' | 'reviewing' | 'resolved';
+
+export type CrimeType =
+  | 'robo'
+  | 'hurto'
+  | 'violencia'
+  | 'accidente'
+  | 'vandalismo'
+  | 'narcotráfico'
+  | 'otro';
+
+export interface AppUser {
   uid: string;
-  email: string | null;
-  displayName: string | null;
-  photoURL: string | null;
+  email: string;
+  displayName: string;
+  photoURL?: string;
   role: UserRole;
+  trustScore: number;       // 0–100, algoritmo RF1
+  totalReports: number;
+  verifiedReports: number;
+  falseAlarms: number;
+  createdAt: Date;
+  district?: string;
 }
 
-export interface LocationData {
-  latitude: number;
-  longitude: number;
-  geohash: string;
-  distrito?: string;
+export interface GeoPoint {
+  lat: number;
+  lng: number;
 }
 
-export interface Incident {
-  id?: string;
-  tipo: IncidentType;
-  ubicacion: LocationData;
-  evidencia: {
-    fotoUrl: string | null;
-    audioUrl: string | null;
-    ia_score?: number;
-  };
-  estado: IncidentState;
-  prioridad: PriorityLevel;
-  timestamp: Date; // Usaremos firestore Timestamp en la BD, aquí tipamos como Date genérico
-  usuarioId: string;
-  descripcion?: string;
+export interface Report {
+  id: string;
+  authorId: string;         // anonimizado en queries públicas
+  authorName?: string;
+  type: CrimeType;
+  description: string;
+  location: GeoPoint;
+  geohash: string;          // para queries geoespaciales (RF2/RF4)
+  district: string;
+  timestamp: Date;
+  status: ReportStatus;
+  mediaUrls: string[];
+  aiScore?: number;         // confianza Gemini 0–1 (RF1)
+  aiAnalysis?: string;      // texto del análisis de Gemini
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  hour: number;             // 0–23 para filtros horarios (RF4)
 }
 
-export interface UserProfile {
-  uid: string;
-  trust_score: number;
-  rol: UserRole;
-  distrito_base?: string;
-  notificaciones_activas: boolean;
-  ultima_conexion: Date;
+export interface HeatmapPoint {
+  lat: number;
+  lng: number;
+  weight: number;
 }
 
+export interface HeatmapData {
+  hotPoints: HeatmapPoint[];
+  resolvedPoints: HeatmapPoint[];
+}
 
-export interface Unit {
-  unidad_id: string;
-  tipo: 'camioneta' | 'moto' | 'pie';
-  estado: 'disponible' | 'ocupado' | 'patrullando';
-  posicion_actual: [number, number];
-  operativo: string;
+export interface DistrictAnalytics {
+  districtId: string;
+  name: string;
+  totalReports: number;
+  verifiedReports: number;
+  topCrimeType: CrimeType;
+  byType: Record<CrimeType, number>;
+  byHour: Record<number, number>;    // 0–23
+  trend: 'up' | 'down' | 'stable';
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  coordinates: GeoPoint;
+  lastUpdated: Date;
+}
+
+export interface FilterState {
+  district: string;
+  type: CrimeType | '';
+  status: ReportStatus | '';
+  startHour: number;
+  endHour: number;
+  dateFrom: string;
+  dateTo: string;
+}
+
+export interface EtlJob {
+  id: string;
+  fileName: string;
+  status: 'pending' | 'processing' | 'done' | 'error';
+  recordsTotal: number;
+  recordsLoaded: number;
+  errors: string[];
+  startedAt: Date;
+  finishedAt?: Date;
 }
