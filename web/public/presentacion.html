@@ -964,7 +964,8 @@
         <span class="badge badge-primary"><i data-lucide="check-square"></i> Gobierno de Calidad</span>
         <h2><i data-lucide="terminal"></i> DevOps y Calidad ISO/IEC 25010</h2>
         <p class="slide-subtitle">
-
+          El pipeline de integración continua (CI/CD) automatiza la validación del código, garantizando cero regresiones y auditando la seguridad antes de desplegar en producción.
+        </p>
 
         <div class="grid-2">
           <!-- Interactive Job Runner -->
@@ -1378,33 +1379,42 @@
       }
 
       (async () => {
-        await log('$ git push origin main', 100);
-        await log('Resolviendo corredor de CI/CD en GitHub Actions...', 500);
+        await log('$ git push origin develop', 100);
+        await log('GitHub Actions: Inicializando CI/CD Runner...', 400);
+        await log('Corriendo en: Node.js v20 (Ubuntu Runner)', 300);
 
         // Stage 1
         lintStage.classList.add('active');
-        await log('Ejecutando ESLint & Prettier...', 600);
-        await log('TypeScript type-check: OK. (0 advertencias)', 500);
+        await log('<strong>[1/5] Instalar Dependencias & ESLint</strong>', 500);
+        await log('npm ci: exitoso. (Librerías instaladas)', 400);
+        await log('next lint: ✔ No hay advertencias ni errores de linter.', 400);
+        await log('TypeScript type-check: OK. (0 errores de tipado)', 300);
         lintStage.classList.add('passed');
 
         // Stage 2
         jestStage.classList.add('active');
-        await log('Iniciando tests automatizados en Jest...', 600);
-        await log('PASS  src/utils/geo.test.ts (11 tests)', 400);
-        await log('PASS  src/utils/trustScore.test.ts (14 tests)', 400);
-        await log('25 tests completados. Cobertura: 87.33%', 300);
+        await log('<strong>[2/5] Pruebas Unitarias Jest & Cobertura</strong>', 500);
+        await log('jest --coverage: Iniciando suite...', 350);
+        await log('PASS  src/utils/geo.test.ts (12 pruebas pasadas)', 300);
+        await log('PASS  src/utils/trustScore.test.ts (16 pruebas pasadas)', 300);
+        await log('<span style="color: var(--success);">√ 28 pruebas unitarias pasadas de forma exitosa (100%).</span>', 300);
+        await log('Cobertura de código: <strong>87.33%</strong> (clases core en 100%)', 250);
         jestStage.classList.add('passed');
 
         // Stage 3
         sonarStage.classList.add('active');
-        await log('Enviando reportes a SonarQube Cloud...', 600);
-        await log('Auditando Bugs: 0 (Grado A)', 400);
-        await log('Auditando Vulnerabilidades: 0 (Grado A)', 400);
-        await log('Deuda técnica: 0.3%. Duplicidad: 0.4%', 300);
-        await log('<span style="color: var(--success); font-weight:700;">√ Quality Gate aprobado con éxito.</span>', 300);
+        await log('<strong>[3/5] Auditoría de Seguridad (npm audit)</strong>', 500);
+        await log('npm audit --audit-level=high: Escaneando...', 350);
+        await log('Advertencia: 12 vulnerabilidades (10 moderadas, 1 alta, 1 crítica) en dependencias de terceros (undici/next).', 300);
+        await log('<span style="color: var(--warning);">Audit Bypass: Auditoría finalizada de forma informativa para evitar bloqueos.</span>', 350);
+        await log('SonarQube Cloud Quality Gate: <span style="color: var(--success); font-weight:700;">Aprobado (Grado A en bugs y vulnerabilidades)</span>', 400);
         sonarStage.classList.add('passed');
 
-        await log('<span style="color: var(--success); font-weight:700;">Despliegue automático completado en Firebase Hosting.</span>', 500);
+        await log('<strong>[4/5] Compilación y Optimización de Producción</strong>', 500);
+        await log('web: Next.js static production export (out/): exitoso.', 400);
+        await log('functions: Compilación TypeScript de Cloud Functions (lib/): exitoso.', 300);
+        await log('<strong>[5/5] Despliegue Automatizado (Firebase Deploy)</strong>', 500);
+        await log('<span style="color: var(--success); font-weight:700;">Despliegue completado en Firebase Hosting y Firebase Cloud Functions.</span>', 400);
         pipelineRunning = false;
       })();
     };
